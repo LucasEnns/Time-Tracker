@@ -1,39 +1,56 @@
-const STORAGE_KEY = 'time-tracker-v1'
-const APP_VERSION = 1
+const STORAGE_KEY = 'time-tracker-v2'
+const APP_VERSION = 2
 
 const DEFAULT_SETTINGS = {
   targetHoursPerWeek: 40,
-  breakMinutesPer8h: 30,
+  trackingStartDate: '',
+  paidBreakIntervalHours: 3.75,
+  paidBreakMinutes: 15,
   weekStartsOn: 1,
 }
 
 let state = loadState()
-let selectedMode = state.activeSession?.mode || 'work'
 let tickInterval = null
-let projectInputPrevious = state.activeSession?.project || 'General'
+let projectInputPrevious = state.activeSession?.project || state.lastProject || 'General'
 
 const el = {
   liveTimer: document.getElementById('liveTimer'),
   sessionMeta: document.getElementById('sessionMeta'),
   startStopBtn: document.getElementById('startStopBtn'),
-  modeWorkBtn: document.getElementById('modeWorkBtn'),
-  modeBreakBtn: document.getElementById('modeBreakBtn'),
+
+  projectOpenBtn: document.getElementById('projectOpenBtn'),
+  projectCloseBtn: document.getElementById('projectCloseBtn'),
+  projectOverlay: document.getElementById('projectOverlay'),
+
+  settingsOpenBtn: document.getElementById('settingsOpenBtn'),
+  settingsCloseBtn: document.getElementById('settingsCloseBtn'),
+  settingsOverlay: document.getElementById('settingsOverlay'),
+
   projectInput: document.getElementById('projectInput'),
   projectDropdown: document.getElementById('projectDropdown'),
-  totalWorked: document.getElementById('totalWorked'),
+  projectHint: document.getElementById('projectHint'),
+  projectBreakdownList: document.getElementById('projectBreakdownList'),
+  projectDataHint: document.getElementById('projectDataHint'),
+
   yearAvg: document.getElementById('yearAvg'),
   weekSoFar: document.getElementById('weekSoFar'),
   daySoFar: document.getElementById('daySoFar'),
-  dayBreak: document.getElementById('dayBreak'),
-  projectTimesBody: document.getElementById('projectTimesBody'),
+  dayBreakBonus: document.getElementById('dayBreakBonus'),
+  weekDelta: document.getElementById('weekDelta'),
+  yearDelta: document.getElementById('yearDelta'),
+
   targetHoursInput: document.getElementById('targetHoursInput'),
-  breakCapInput: document.getElementById('breakCapInput'),
+  startDateInput: document.getElementById('startDateInput'),
+  breakIntervalHoursInput: document.getElementById('breakIntervalHoursInput'),
+  paidBreakMinutesInput: document.getElementById('paidBreakMinutesInput'),
   saveSettingsBtn: document.getElementById('saveSettingsBtn'),
   settingsHint: document.getElementById('settingsHint'),
+
   exportBtn: document.getElementById('exportBtn'),
-  exportProjectCsvBtn: document.getElementById('exportProjectCsvBtn'),
   importInput: document.getElementById('importInput'),
-  dataHint: document.getElementById('dataHint'),
+  jsonHint: document.getElementById('jsonHint'),
+
+  exportProjectCsvBtn: document.getElementById('exportProjectCsvBtn'),
 }
 
 init()
@@ -46,9 +63,24 @@ function init() {
 }
 
 function bindEvents() {
-  el.startStopBtn.addEventListener('click', onStartStop)
-  el.modeWorkBtn.addEventListener('click', () => onChangeMode('work'))
-  el.modeBreakBtn.addEventListener('click', () => onChangeMode('break'))
+  el.startStopBtn.addEventListener('click', onClockToggle)
+
+  el.projectOpenBtn.addEventListener('click', () => setOverlayOpen(el.projectOverlay, true))
+  el.projectCloseBtn.addEventListener('click', () => setOverlayOpen(el.projectOverlay, false))
+  el.projectOverlay.addEventListener('click', (event) => {
+    if (event.target === el.projectOverlay) {
+      setOverlayOpen(el.projectOverlay, false)
+    }
+  })
+
+  el.settingsOpenBtn.addEventListener('click', () => setOverlayOpen(el.settingsOverlay, true))
+  el.settingsCloseBtn.addEventListener('click', () => setOverlayOpen(el.settingsOverlay, false))
+  el.settingsOverlay.addEventListener('click', (event) => {
+    if (event.target === el.settingsOverlay) {
+      setOverlayOpen(el.settingsOverlay, false)
+    }
+  })
+
   el.projectInput.addEventListener('change', onProjectChanged)
   el.projectInput.addEventListener('blur', onProjectInputBlur)
   el.projectInput.addEventListener('focus', () => {
@@ -61,7 +93,9 @@ function bindEvents() {
       onProjectChanged()
     }
   })
+
   document.addEventListener('click', onDocumentClick)
+
   el.saveSettingsBtn.addEventListener('click', onSaveSettings)
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
@@ -70,41 +104,30 @@ function bindEvents() {
 
 function hydrateInputs() {
   el.targetHoursInput.value = String(state.settings.targetHoursPerWeek)
-  el.breakCapInput.value = String(state.settings.breakMinutesPer8h)
-  el.projectInput.value = state.activeSession?.project || 'General'
+  el.startDateInput.value = state.settings.trackingStartDate || ''
+  el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
+  el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
+  el.projectInput.value = state.activeSession?.project || state.lastProject || 'General'
   projectInputPrevious = getProjectInput()
 }
 
-function onStartStop() {
+function onClockToggle() {
   if (state.activeSession) {
+    processPaidBreakAwards()
     closeActiveSession({ keepRun: false })
-    setHint(el.dataHint, 'Session stopped.')
+    setHint(el.projectHint, 'Clocked out.')
   } else {
-    startSession(selectedMode, getProjectInput())
-    setHint(el.dataHint, 'Session started.')
+    startSession(getProjectInput())
+    setHint(el.projectHint, 'Clocked in.')
   }
-  render()
-}
-
-function onChangeMode(mode) {
-  if (mode !== 'work' && mode !== 'break') {
-    return
-  }
-
-  selectedMode = mode
-
-  if (state.activeSession && state.activeSession.mode !== mode) {
-    closeActiveSession({ keepRun: true })
-    startSession(mode, getProjectInput(), { keepRun: true })
-    setHint(el.dataHint, `Switched to ${mode} mode and split session.`)
-  }
-
   render()
 }
 
 function onProjectChanged() {
   const nextProject = getProjectInput()
-  const knownProjects = new Set(collectProjects(state.sessions, state.activeSession))
+  const knownProjects = new Set(
+    collectProjects(state.sessions, state.activeSession, state.paidBreakAwards),
+  )
 
   if (!state.activeSession) {
     const previousProject = projectInputPrevious
@@ -117,12 +140,14 @@ function onProjectChanged() {
       const renamedCount = renameProjectEverywhere(previousProject, nextProject)
       saveState()
       setHint(
-        el.dataHint,
+        el.projectHint,
         `Renamed ${previousProject} to ${nextProject} (${renamedCount} records).`,
       )
       render()
     }
     projectInputPrevious = nextProject
+    state.lastProject = nextProject
+    saveState()
     return
   }
 
@@ -132,15 +157,15 @@ function onProjectChanged() {
     return
   }
 
+  processPaidBreakAwards()
   closeActiveSession({ keepRun: true })
-  startSession(selectedMode, nextProject, { keepRun: true })
-  setHint(el.dataHint, `Switched project to ${nextProject}.`)
+  startSession(nextProject, { keepRun: true })
+  setHint(el.projectHint, `Switched project to ${nextProject}.`)
   projectInputPrevious = nextProject
   render()
 }
 
 function onProjectInputBlur() {
-  // Delay allows pointer selection from the custom dropdown.
   setTimeout(() => {
     onProjectChanged()
     hideProjectDropdown()
@@ -157,20 +182,37 @@ function onDocumentClick(event) {
 
 function onSaveSettings() {
   const target = Number(el.targetHoursInput.value)
-  const breakCap = Number(el.breakCapInput.value)
+  const trackingStartDate = el.startDateInput.value
+  const intervalHours = Number(el.breakIntervalHoursInput.value)
+  const paidBreak = Number(el.paidBreakMinutesInput.value)
 
   if (!Number.isFinite(target) || target <= 0) {
     setHint(el.settingsHint, 'Target hours/week must be greater than 0.')
     return
   }
 
-  if (!Number.isFinite(breakCap) || breakCap < 0) {
-    setHint(el.settingsHint, 'Break cap must be 0 or greater.')
+  if (!Number.isFinite(intervalHours) || intervalHours <= 0) {
+    setHint(el.settingsHint, 'Break interval must be greater than 0 hours.')
+    return
+  }
+
+  if (trackingStartDate) {
+    const parsedStart = parseDateOnly(trackingStartDate)
+    if (!parsedStart) {
+      setHint(el.settingsHint, 'Tracking start date is invalid.')
+      return
+    }
+  }
+
+  if (!Number.isFinite(paidBreak) || paidBreak < 0) {
+    setHint(el.settingsHint, 'Paid break minutes must be 0 or greater.')
     return
   }
 
   state.settings.targetHoursPerWeek = target
-  state.settings.breakMinutesPer8h = breakCap
+  state.settings.trackingStartDate = trackingStartDate || ''
+  state.settings.paidBreakIntervalHours = intervalHours
+  state.settings.paidBreakMinutes = paidBreak
   saveState()
   setHint(el.settingsHint, 'Settings saved.')
   render()
@@ -186,13 +228,12 @@ function onExportJson() {
   a.download = `time-tracker-backup-${stamp}.json`
   a.click()
   URL.revokeObjectURL(url)
-  setHint(el.dataHint, 'Exported JSON backup.')
+  setHint(el.jsonHint, 'Exported JSON backup.')
 }
 
 function onExportProjectCsv() {
   const now = new Date()
-  const sessions = materializeSessionsForNow()
-  const rows = getProjectBreakdownRows(sessions, now)
+  const rows = getProjectBreakdownRows(now)
 
   const header = ['Project', 'Day', 'Week', 'Total']
   const csvRows = [header, ...rows.map((row) => [row.project, row.day, row.week, row.total])]
@@ -206,7 +247,7 @@ function onExportProjectCsv() {
   a.download = `time-tracker-project-breakdown-${stamp}.csv`
   a.click()
   URL.revokeObjectURL(url)
-  setHint(el.dataHint, 'Exported project breakdown CSV.')
+  setHint(el.projectDataHint, 'Exported project breakdown CSV.')
 }
 
 async function onImportJson(event) {
@@ -219,7 +260,6 @@ async function onImportJson(event) {
     const text = await file.text()
     const parsed = JSON.parse(text)
     const imported = normalizeImportedState(parsed)
-    const mergedCount = mergeSessions(imported.sessions)
 
     state.settings = {
       ...state.settings,
@@ -227,32 +267,41 @@ async function onImportJson(event) {
       weekStartsOn: 1,
     }
 
-    // Active session is intentionally not imported to avoid phantom running timers.
+    const mergedSessions = mergeById(state.sessions, imported.sessions)
+    const mergedAwards = mergeById(state.paidBreakAwards, imported.paidBreakAwards)
     saveState()
     hydrateInputs()
     render()
-    setHint(el.dataHint, `Imported ${mergedCount} new sessions.`)
-  } catch (error) {
-    setHint(el.dataHint, 'Import failed: invalid file format.')
+    setHint(el.jsonHint, `Imported ${mergedSessions + mergedAwards} new records.`)
+  } catch {
+    setHint(el.jsonHint, 'Import failed: invalid file format.')
   } finally {
     event.target.value = ''
   }
 }
 
-function startSession(mode, project, options = {}) {
+function setOverlayOpen(node, isOpen) {
+  node.classList.toggle('open', isOpen)
+  node.setAttribute('aria-hidden', String(!isOpen))
+}
+
+function startSession(project, options = {}) {
   const now = Date.now()
   const keepRun = Boolean(options.keepRun)
 
   if (!keepRun || !state.activeRunStart) {
     state.activeRunStart = now
+    state.activeBreaksGranted = 0
   }
 
   state.activeSession = {
     id: createId(),
     start: now,
-    mode,
     project,
   }
+
+  state.lastProject = project
+
   saveState()
   ensureTicker()
 }
@@ -262,25 +311,58 @@ function closeActiveSession(options = {}) {
     return
   }
 
+  const now = Date.now()
   const keepRun = Boolean(options.keepRun)
 
-  const now = Date.now()
-  const session = {
+  state.sessions.push({
     id: state.activeSession.id,
     start: state.activeSession.start,
     end: now,
-    mode: state.activeSession.mode,
     project: state.activeSession.project,
     durationMs: Math.max(0, now - state.activeSession.start),
-  }
+  })
 
-  state.sessions.push(session)
   state.activeSession = null
   if (!keepRun) {
     state.activeRunStart = null
+    state.activeBreaksGranted = 0
   }
+
   saveState()
   ensureTicker()
+}
+
+function processPaidBreakAwards() {
+  if (!state.activeSession || !state.activeRunStart) {
+    return
+  }
+
+  const intervalMs = state.settings.paidBreakIntervalHours * 60 * 60 * 1000
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    return
+  }
+
+  const elapsed = Date.now() - state.activeRunStart
+  const shouldHaveGranted = Math.floor(elapsed / intervalMs)
+
+  while (state.activeBreaksGranted < shouldHaveGranted) {
+    state.activeBreaksGranted += 1
+    const awardTime = state.activeRunStart + state.activeBreaksGranted * intervalMs
+
+    state.paidBreakAwards.push({
+      id: createId(),
+      at: awardTime,
+      project: state.activeSession.project,
+      durationMs: state.settings.paidBreakMinutes * 60 * 1000,
+    })
+
+    setHint(
+      el.projectHint,
+      `Added paid break (${state.settings.paidBreakMinutes}m) to ${state.activeSession.project}.`,
+    )
+  }
+
+  saveState()
 }
 
 function ensureTicker() {
@@ -291,32 +373,29 @@ function ensureTicker() {
 
   if (state.activeSession) {
     tickInterval = setInterval(() => {
+      processPaidBreakAwards()
       renderLiveTimer()
       renderStats()
+      renderProjectBreakdown(new Date())
     }, 1000)
   }
 }
 
 function render() {
-  renderModeButtons()
   renderProjects()
   renderLiveTimer()
   renderStats()
+  renderProjectBreakdown(new Date())
 
-  const isRunning = Boolean(state.activeSession)
-  el.startStopBtn.textContent = isRunning ? 'Stop' : 'Start'
-  el.sessionMeta.textContent = isRunning
-    ? `${state.activeSession.mode.toUpperCase()} • ${state.activeSession.project || 'General'}`
+  const running = Boolean(state.activeSession)
+  el.startStopBtn.textContent = running ? 'Clock Out' : 'Clock In'
+  el.sessionMeta.textContent = running
+    ? `On Shift • ${state.activeSession.project || 'General'}`
     : 'Stopped'
 }
 
-function renderModeButtons() {
-  el.modeWorkBtn.classList.toggle('active', selectedMode === 'work')
-  el.modeBreakBtn.classList.toggle('active', selectedMode === 'break')
-}
-
 function renderProjects() {
-  const projects = getProjectsByLastUse(state.sessions, state.activeSession)
+  const projects = getProjectsByLastUse(state.sessions, state.activeSession, state.paidBreakAwards)
   el.projectDropdown.innerHTML = ''
 
   for (const project of projects) {
@@ -351,89 +430,118 @@ function hideProjectDropdown() {
 }
 
 function renderLiveTimer() {
-  if (!state.activeSession) {
+  if (!state.activeSession || !state.activeRunStart) {
     el.liveTimer.textContent = '00:00:00'
     return
   }
 
-  const elapsedMs = Date.now() - (state.activeRunStart || state.activeSession.start)
-  el.liveTimer.textContent = formatClock(elapsedMs)
+  const elapsed = Date.now() - state.activeRunStart
+  el.liveTimer.textContent = formatClock(elapsed)
 }
 
 function renderStats() {
   const now = new Date()
-  const sessions = materializeSessionsForNow()
-  const settings = state.settings
-  const daySessions = filterByRange(sessions, startOfDay(now), now)
+  const day = computeRangeTotalMs(startOfDay(now), now)
+  const week = computeRangeTotalMs(startOfWeek(now, state.settings.weekStartsOn), now)
 
-  const total = computeEffectiveWorkedMs(sessions, settings)
-  const day = computeEffectiveWorkedMs(daySessions, settings)
-  const week = computeEffectiveWorkedMs(
-    filterByRange(sessions, startOfWeek(now, settings.weekStartsOn), now),
-    settings,
-  )
-  const dayBreakMs = sumDurationByMode(daySessions, 'break')
+  const trackingStart = resolveTrackingStart(now)
+  const totalSinceStart = computeRangeTotalMs(trackingStart, now)
+  const activeWeeks = countActiveWeeks(trackingStart, now, state.settings.weekStartsOn)
+  const avgYearWeek = activeWeeks > 0 ? totalSinceStart / activeWeeks : 0
+  const weekTargetMs = state.settings.targetHoursPerWeek * 60 * 60 * 1000
+  const weekDeltaMs = week - weekTargetMs
 
-  const yearStart = new Date(now.getFullYear(), 0, 1)
-  const yearSessions = filterByRange(sessions, yearStart, now)
-  const activeWeeks = countActiveWeeks(yearSessions, settings.weekStartsOn)
-  const yearTotal = computeEffectiveWorkedMs(yearSessions, settings)
-  const avgYearWeek = activeWeeks > 0 ? yearTotal / activeWeeks : 0
+  const elapsedWeeksSinceStart = Math.max(0, computeElapsedWeeks(trackingStart, now))
+  const targetSinceStartMs = elapsedWeeksSinceStart * weekTargetMs
+  const yearDeltaMs = totalSinceStart - targetSinceStartMs
 
-  el.totalWorked.textContent = formatDuration(total)
+  const dayBonus = computeAwardRangeMs(startOfDay(now), now)
+
   el.daySoFar.textContent = formatDuration(day)
-  el.dayBreak.textContent = formatDuration(dayBreakMs)
   el.weekSoFar.textContent = formatDuration(week)
   el.yearAvg.textContent = formatDuration(avgYearWeek)
-
-  renderProjectBreakdown(sessions, now)
+  el.dayBreakBonus.textContent = formatDuration(dayBonus)
+  el.weekDelta.textContent = formatSignedDuration(weekDeltaMs)
+  el.yearDelta.textContent = formatSignedDuration(yearDeltaMs)
 }
 
-function renderProjectBreakdown(sessions, now) {
-  const rows = getProjectBreakdownRows(sessions, now)
+function renderProjectBreakdown(now) {
+  const rows = getProjectBreakdownRows(now)
+  el.projectBreakdownList.innerHTML = ''
 
-  el.projectTimesBody.innerHTML = ''
-
-  for (const rowData of rows) {
-    const row = document.createElement('tr')
-    row.innerHTML = `
-      <td>${escapeHtml(rowData.project)}</td>
-      <td>${rowData.day}</td>
-      <td>${rowData.week}</td>
-      <td>${rowData.total}</td>
+  for (const row of rows) {
+    const item = document.createElement('article')
+    item.className = 'project-breakdown-row'
+    item.innerHTML = `
+      <div class="project-breakdown-name">${escapeHtml(row.project)}</div>
+      <div class="project-breakdown-meta">Day ${row.day} • Week ${row.week} • Total ${
+      row.total
+    }</div>
     `
-    el.projectTimesBody.appendChild(row)
+    el.projectBreakdownList.appendChild(item)
   }
 }
 
-function getProjectBreakdownRows(sessions, now) {
-  const projects = [...collectProjects(sessions, state.activeSession)].sort((a, b) =>
-    a.localeCompare(b),
-  )
-  const daySessions = filterByRange(sessions, startOfDay(now), now)
-  const weekSessions = filterByRange(sessions, startOfWeek(now, state.settings.weekStartsOn), now)
+function getProjectBreakdownRows(now) {
+  const projects = getProjectsByLastUse(state.sessions, state.activeSession, state.paidBreakAwards)
+  const dayStart = startOfDay(now)
+  const weekStart = startOfWeek(now, state.settings.weekStartsOn)
 
   return projects.map((project) => {
-    const projectAll = sessions.filter((session) => session.project === project)
-    const projectDay = daySessions.filter((session) => session.project === project)
-    const projectWeek = weekSessions.filter((session) => session.project === project)
-
     return {
       project,
-      day: formatDuration(computeEffectiveWorkedMs(projectDay, state.settings)),
-      week: formatDuration(computeEffectiveWorkedMs(projectWeek, state.settings)),
-      total: formatDuration(computeEffectiveWorkedMs(projectAll, state.settings)),
+      day: formatDuration(computeProjectRangeTotalMs(project, dayStart, now)),
+      week: formatDuration(computeProjectRangeTotalMs(project, weekStart, now)),
+      total: formatDuration(computeProjectRangeTotalMs(project, null, now)),
     }
   })
 }
 
-function getProjectInput() {
-  const value = el.projectInput.value.trim()
-  return value || 'General'
+function computeRangeTotalMs(startDate, endDate) {
+  return computeSessionRangeMs(startDate, endDate) + computeAwardRangeMs(startDate, endDate)
 }
 
-function setHint(node, text) {
-  node.textContent = text
+function computeProjectRangeTotalMs(project, startDate, endDate) {
+  return (
+    computeSessionRangeMs(startDate, endDate, project) +
+    computeAwardRangeMs(startDate, endDate, project)
+  )
+}
+
+function computeSessionRangeMs(startDate, endDate, project) {
+  const sessions = materializeSessionsForNow()
+  const startMs = startDate ? startDate.getTime() : Number.MIN_SAFE_INTEGER
+  const endMs = endDate.getTime()
+
+  let total = 0
+  for (const session of sessions) {
+    if (project && session.project !== project) {
+      continue
+    }
+    const overlapStart = Math.max(session.start, startMs)
+    const overlapEnd = Math.min(session.end, endMs)
+    if (overlapEnd > overlapStart) {
+      total += overlapEnd - overlapStart
+    }
+  }
+  return total
+}
+
+function computeAwardRangeMs(startDate, endDate, project) {
+  const awards = materializeAwardsForNow()
+  const startMs = startDate ? startDate.getTime() : Number.MIN_SAFE_INTEGER
+  const endMs = endDate.getTime()
+
+  let total = 0
+  for (const award of awards) {
+    if (project && award.project !== project) {
+      continue
+    }
+    if (award.at >= startMs && award.at <= endMs) {
+      total += award.durationMs
+    }
+  }
+  return total
 }
 
 function materializeSessionsForNow() {
@@ -444,7 +552,6 @@ function materializeSessionsForNow() {
       id: state.activeSession.id,
       start: state.activeSession.start,
       end: now,
-      mode: state.activeSession.mode,
       project: state.activeSession.project,
       durationMs: Math.max(0, now - state.activeSession.start),
     })
@@ -452,75 +559,41 @@ function materializeSessionsForNow() {
   return sessions
 }
 
-function filterByRange(sessions, startDate, endDate) {
-  const startMs = startDate.getTime()
-  const endMs = endDate.getTime()
-
-  return sessions
-    .map((session) => {
-      const overlapStart = Math.max(session.start, startMs)
-      const overlapEnd = Math.min(session.end, endMs)
-      const durationMs = overlapEnd - overlapStart
-
-      if (durationMs <= 0) {
-        return null
-      }
-
-      return {
-        ...session,
-        start: overlapStart,
-        end: overlapEnd,
-        durationMs,
-      }
-    })
-    .filter(Boolean)
+function materializeAwardsForNow() {
+  return [...state.paidBreakAwards]
 }
 
-function computeEffectiveWorkedMs(sessions, settings) {
-  const byDay = new Map()
-  const todayKey = dayKey(new Date())
-  let totalMs = 0
+function countActiveWeeks(startDate, endDate, weekStartsOn) {
+  const keys = new Set()
 
+  const sessions = materializeSessionsForNow()
   for (const session of sessions) {
-    const key = dayKey(new Date(session.start))
-    const entry = byDay.get(key) || { workMs: 0, breakMs: 0 }
-
-    if (session.mode === 'work') {
-      entry.workMs += session.durationMs
-    } else if (session.mode === 'break') {
-      entry.breakMs += session.durationMs
-    }
-
-    byDay.set(key, entry)
-  }
-
-  for (const [key, entry] of byDay.entries()) {
-    if (key === todayKey) {
-      totalMs += entry.workMs
+    if (session.end < startDate.getTime() || session.start > endDate.getTime()) {
       continue
     }
-
-    const allowedBreakMs =
-      (entry.workMs / (8 * 60 * 60 * 1000)) * settings.breakMinutesPer8h * 60 * 1000
-    const excessBreakMs = Math.max(0, entry.breakMs - allowedBreakMs)
-    totalMs += Math.max(0, entry.workMs - excessBreakMs)
+    const weekStart = startOfWeek(new Date(session.start), weekStartsOn)
+    keys.add(dayKey(weekStart))
   }
 
-  return totalMs
-}
-
-function sumDurationByMode(sessions, mode) {
-  let total = 0
-  for (const session of sessions) {
-    if (session.mode === mode) {
-      total += session.durationMs
+  const awards = materializeAwardsForNow()
+  for (const award of awards) {
+    if (award.at < startDate.getTime() || award.at > endDate.getTime()) {
+      continue
     }
+    const weekStart = startOfWeek(new Date(award.at), weekStartsOn)
+    keys.add(dayKey(weekStart))
   }
-  return total
+
+  return keys.size
 }
 
-function dayKey(date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+function getProjectInput() {
+  const value = el.projectInput.value.trim()
+  return value || 'General'
+}
+
+function setHint(node, text) {
+  node.textContent = text
 }
 
 function startOfDay(date) {
@@ -536,14 +609,56 @@ function startOfWeek(date, weekStartsOn) {
   return start
 }
 
-function countActiveWeeks(sessions, weekStartsOn) {
-  const keys = new Set()
-  for (const session of sessions) {
-    const start = startOfWeek(new Date(session.start), weekStartsOn)
-    const key = `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`
-    keys.add(key)
+function dayKey(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function countElapsedCalendarWeeksInYear(date, weekStartsOn) {
+  const yearStart = new Date(date.getFullYear(), 0, 1)
+  const currentWeekStart = startOfWeek(date, weekStartsOn)
+  const firstWeekStart = startOfWeek(yearStart, weekStartsOn)
+  const diffMs = currentWeekStart.getTime() - firstWeekStart.getTime()
+  return Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1
+}
+
+function resolveTrackingStart(now) {
+  const parsed = parseDateOnly(state.settings.trackingStartDate)
+  if (!parsed) {
+    return new Date(now.getFullYear(), 0, 1)
   }
-  return keys.size
+  const todayStart = startOfDay(now)
+  if (parsed.getTime() > todayStart.getTime()) {
+    return todayStart
+  }
+  return parsed
+}
+
+function computeElapsedWeeks(startDate, endDate) {
+  const diffMs = Math.max(0, endDate.getTime() - startDate.getTime())
+  return diffMs / (7 * 24 * 60 * 60 * 1000)
+}
+
+function parseDateOnly(value) {
+  if (!value) {
+    return null
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) {
+    return null
+  }
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const parsed = new Date(year, month - 1, day)
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null
+  }
+  parsed.setHours(0, 0, 0, 0)
+  return parsed
 }
 
 function formatClock(ms) {
@@ -561,8 +676,21 @@ function formatDuration(ms) {
   return `${hours}h ${minutes}m`
 }
 
+function formatSignedDuration(ms) {
+  const sign = ms >= 0 ? '+' : '-'
+  return `${sign}${formatDuration(Math.abs(ms))}`
+}
+
+function pad(n) {
+  return String(n).padStart(2, '0')
+}
+
+function createId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 function escapeHtml(value) {
-  return value
+  return String(value)
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
@@ -575,25 +703,50 @@ function csvEscape(value) {
   return `"${text.replaceAll('"', '""')}"`
 }
 
-function pad(n) {
-  return String(n).padStart(2, '0')
-}
-
-function createId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-function collectProjects(sessions, activeSession) {
+function collectProjects(sessions, activeSession, awards = []) {
   const projects = new Set(['General'])
   for (const session of sessions) {
     if (session.project) {
       projects.add(session.project)
     }
   }
+  for (const award of awards) {
+    if (award.project) {
+      projects.add(award.project)
+    }
+  }
   if (activeSession?.project) {
     projects.add(activeSession.project)
   }
   return projects
+}
+
+function getProjectsByLastUse(sessions, activeSession, awards = []) {
+  const latestByProject = new Map([['General', 0]])
+
+  for (const session of sessions) {
+    if (!session.project) {
+      continue
+    }
+    const current = latestByProject.get(session.project) || 0
+    latestByProject.set(session.project, Math.max(current, session.end || session.start))
+  }
+
+  for (const award of awards) {
+    if (!award.project) {
+      continue
+    }
+    const current = latestByProject.get(award.project) || 0
+    latestByProject.set(award.project, Math.max(current, award.at))
+  }
+
+  if (activeSession?.project) {
+    latestByProject.set(activeSession.project, Date.now())
+  }
+
+  return [...latestByProject.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([project]) => project)
 }
 
 function renameProjectEverywhere(oldName, newName) {
@@ -609,6 +762,13 @@ function renameProjectEverywhere(oldName, newName) {
     }
   }
 
+  for (const award of state.paidBreakAwards) {
+    if (award.project === oldName) {
+      award.project = newName
+      count += 1
+    }
+  }
+
   if (state.activeSession?.project === oldName) {
     state.activeSession.project = newName
   }
@@ -616,54 +776,39 @@ function renameProjectEverywhere(oldName, newName) {
   return count
 }
 
-function getProjectsByLastUse(sessions, activeSession) {
-  const latestByProject = new Map([['General', 0]])
-
-  for (const session of sessions) {
-    if (!session.project) {
-      continue
-    }
-
-    const project = session.project
-    const timestamp = Number.isFinite(session.end) ? session.end : session.start
-    const current = latestByProject.get(project) || 0
-    latestByProject.set(project, Math.max(current, timestamp))
-  }
-
-  if (activeSession?.project) {
-    latestByProject.set(activeSession.project, Date.now())
-  }
-
-  return [...latestByProject.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([project]) => project)
-}
-
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      return defaultState()
+    if (raw) {
+      return normalizeImportedState(JSON.parse(raw))
     }
 
-    const parsed = JSON.parse(raw)
-    return normalizeImportedState(parsed)
+    const legacyRaw = localStorage.getItem('time-tracker-v1')
+    if (legacyRaw) {
+      return migrateLegacyState(JSON.parse(legacyRaw))
+    }
+
+    return defaultState()
   } catch {
     return defaultState()
   }
 }
 
 function saveState() {
-  const payload = {
-    version: APP_VERSION,
-    settings: state.settings,
-    sessions: state.sessions,
-    activeSession: state.activeSession,
-    activeRunStart: state.activeRunStart,
-    updatedAt: Date.now(),
-  }
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      version: APP_VERSION,
+      settings: state.settings,
+      sessions: state.sessions,
+      paidBreakAwards: state.paidBreakAwards,
+      activeSession: state.activeSession,
+      lastProject: state.lastProject,
+      activeRunStart: state.activeRunStart,
+      activeBreaksGranted: state.activeBreaksGranted,
+      updatedAt: Date.now(),
+    }),
+  )
 }
 
 function defaultState() {
@@ -671,39 +816,100 @@ function defaultState() {
     version: APP_VERSION,
     settings: { ...DEFAULT_SETTINGS },
     sessions: [],
+    paidBreakAwards: [],
     activeSession: null,
+    lastProject: 'General',
     activeRunStart: null,
+    activeBreaksGranted: 0,
     updatedAt: Date.now(),
   }
 }
 
 function normalizeImportedState(input) {
+  const base = defaultState()
+
+  if (!input || typeof input !== 'object') {
+    return base
+  }
+
+  const legacyMinutes = Number(input?.settings?.paidBreakIntervalMinutes)
+  const inferredHours = Number.isFinite(legacyMinutes) ? legacyMinutes / 60 : undefined
+
   const settings = {
     ...DEFAULT_SETTINGS,
-    ...(input && typeof input === 'object' ? input.settings : null),
+    ...(input.settings || {}),
+    paidBreakIntervalHours: Number.isFinite(Number(input?.settings?.paidBreakIntervalHours))
+      ? Number(input.settings.paidBreakIntervalHours)
+      : inferredHours || DEFAULT_SETTINGS.paidBreakIntervalHours,
     weekStartsOn: 1,
   }
 
-  const sessions = Array.isArray(input?.sessions)
+  const sessions = Array.isArray(input.sessions)
     ? input.sessions
-        .map((session) => normalizeSession(session))
+        .map(normalizeSession)
         .filter((session) => session && session.end > session.start)
     : []
 
-  const activeSession = normalizeActiveSession(input?.activeSession)
-  const activeRunStart =
-    Number.isFinite(Number(input?.activeRunStart)) && Number(input.activeRunStart) > 0
-      ? Number(input.activeRunStart)
-      : activeSession?.start || null
+  const paidBreakAwards = Array.isArray(input.paidBreakAwards)
+    ? input.paidBreakAwards.map(normalizeAward).filter((award) => award && award.durationMs >= 0)
+    : []
+
+  const activeSession = normalizeActiveSession(input.activeSession)
 
   return {
     version: APP_VERSION,
     settings,
     sessions,
+    paidBreakAwards,
     activeSession,
-    activeRunStart,
+    lastProject:
+      typeof input.lastProject === 'string' && input.lastProject.trim()
+        ? input.lastProject.trim()
+        : activeSession?.project || 'General',
+    activeRunStart:
+      Number.isFinite(Number(input.activeRunStart)) && Number(input.activeRunStart) > 0
+        ? Number(input.activeRunStart)
+        : activeSession?.start || null,
+    activeBreaksGranted:
+      Number.isFinite(Number(input.activeBreaksGranted)) && Number(input.activeBreaksGranted) >= 0
+        ? Number(input.activeBreaksGranted)
+        : 0,
     updatedAt: Date.now(),
   }
+}
+
+function migrateLegacyState(legacy) {
+  const migrated = defaultState()
+
+  migrated.settings.targetHoursPerWeek = Number(legacy?.settings?.targetHoursPerWeek) || 40
+  migrated.settings.paidBreakIntervalHours = 3.75
+  migrated.settings.paidBreakMinutes = 15
+
+  if (Array.isArray(legacy?.sessions)) {
+    for (const item of legacy.sessions) {
+      const session = normalizeSession(item)
+      if (!session) {
+        continue
+      }
+      if (item.mode === 'break') {
+        continue
+      }
+      migrated.sessions.push(session)
+    }
+  }
+
+  migrated.activeSession = normalizeActiveSession(legacy?.activeSession)
+  migrated.lastProject =
+    migrated.activeSession?.project ||
+    (Array.isArray(migrated.sessions) && migrated.sessions.length > 0
+      ? migrated.sessions[migrated.sessions.length - 1].project
+      : 'General')
+  migrated.activeRunStart =
+    Number.isFinite(Number(legacy?.activeRunStart)) && Number(legacy.activeRunStart) > 0
+      ? Number(legacy.activeRunStart)
+      : migrated.activeSession?.start || null
+
+  return migrated
 }
 
 function normalizeSession(session) {
@@ -713,23 +919,43 @@ function normalizeSession(session) {
 
   const start = Number(session.start)
   const end = Number(session.end)
-  const mode = session.mode === 'break' ? 'break' : 'work'
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return null
+  }
+
   const project =
     typeof session.project === 'string' && session.project.trim()
       ? session.project.trim()
       : 'General'
 
-  if (!Number.isFinite(start) || !Number.isFinite(end)) {
-    return null
-  }
-
   return {
     id: typeof session.id === 'string' ? session.id : createId(),
     start,
     end,
-    mode,
     project,
     durationMs: Math.max(0, end - start),
+  }
+}
+
+function normalizeAward(award) {
+  if (!award || typeof award !== 'object') {
+    return null
+  }
+
+  const at = Number(award.at)
+  const durationMs = Number(award.durationMs)
+  if (!Number.isFinite(at) || !Number.isFinite(durationMs)) {
+    return null
+  }
+
+  const project =
+    typeof award.project === 'string' && award.project.trim() ? award.project.trim() : 'General'
+
+  return {
+    id: typeof award.id === 'string' ? award.id : createId(),
+    at,
+    project,
+    durationMs: Math.max(0, durationMs),
   }
 }
 
@@ -743,29 +969,27 @@ function normalizeActiveSession(session) {
     return null
   }
 
+  const project =
+    typeof session.project === 'string' && session.project.trim()
+      ? session.project.trim()
+      : 'General'
+
   return {
     id: typeof session.id === 'string' ? session.id : createId(),
     start,
-    mode: session.mode === 'break' ? 'break' : 'work',
-    project:
-      typeof session.project === 'string' && session.project.trim()
-        ? session.project.trim()
-        : 'General',
+    project,
   }
 }
 
-function mergeSessions(importedSessions) {
-  const seenIds = new Set(state.sessions.map((s) => s.id))
+function mergeById(targetArray, sourceArray) {
+  const seen = new Set(targetArray.map((item) => item.id))
   let added = 0
-
-  for (const session of importedSessions) {
-    if (!seenIds.has(session.id)) {
-      state.sessions.push(session)
-      seenIds.add(session.id)
+  for (const item of sourceArray) {
+    if (!seen.has(item.id)) {
+      targetArray.push(item)
+      seen.add(item.id)
       added += 1
     }
   }
-
-  state.sessions.sort((a, b) => a.start - b.start)
   return added
 }

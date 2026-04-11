@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#10454f" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#e8f0ff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1520" />
     <title>Time Tracker</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
@@ -11,30 +12,54 @@
     <main class="app">
       <header class="topbar">
         <h1>Time Tracker</h1>
-        <p>Mobile-first, local-only, no backend.</p>
+        <div class="top-actions">
+          <button id="projectOpenBtn" class="btn menu-btn" type="button">Projects</button>
+          <button id="settingsOpenBtn" class="btn menu-btn" type="button">Settings</button>
+        </div>
       </header>
+
+      <p class="subhead">Mobile-first, local-only, no backend.</p>
+
+      <section class="stats-grid">
+        <article class="panel stat">
+          <p class="label">Avg / Active Week (Since Start)</p>
+          <p id="yearAvg" class="value">0h 0m</p>
+          <div class="stat-subrow">
+            <p class="subkey">Since Start Over / Under</p>
+            <p id="yearDelta" class="subvalue">0h 0m</p>
+          </div>
+        </article>
+        <article class="panel stat">
+          <p class="label">Week So Far</p>
+          <p id="weekSoFar" class="value">0h 0m</p>
+          <div class="stat-subrow">
+            <p class="subkey">Week Over / Under Target</p>
+            <p id="weekDelta" class="subvalue">0h 0m</p>
+          </div>
+        </article>
+        <article class="panel stat">
+          <p class="label">Day So Far</p>
+          <p id="daySoFar" class="value">0h 0m</p>
+          <div class="stat-subrow">
+            <p class="subkey">Paid Break Added Today</p>
+            <p id="dayBreakBonus" class="subvalue">0h 0m</p>
+          </div>
+        </article>
+      </section>
 
       <section class="panel hero">
         <div class="timer-wrap">
-          <p class="label">Current Session</p>
+          <p class="label">Current Shift</p>
           <p id="liveTimer" class="timer">00:00:00</p>
           <p id="sessionMeta" class="meta">Stopped</p>
         </div>
 
         <div class="controls">
-          <button id="startStopBtn" class="btn primary" type="button">Start</button>
-          <div class="mode-switch" role="group" aria-label="Mode">
-            <button id="modeWorkBtn" class="btn mode active" data-mode="work" type="button">
-              Work
-            </button>
-            <button id="modeBreakBtn" class="btn mode" data-mode="break" type="button">
-              Break
-            </button>
-          </div>
+          <button id="startStopBtn" class="btn primary clock-btn" type="button">Clock In</button>
         </div>
 
-        <label class="field">
-          <span>Project</span>
+        <label class="field project-main-field">
+          <span>Active Project</span>
           <div class="project-input-wrap">
             <input
               id="projectInput"
@@ -51,79 +76,71 @@
               role="listbox"
               aria-label="Recent projects"></div>
           </div>
-          <small class="field-note"
-            >Select existing or type a new one. When stopped, renaming updates past records.</small
-          >
         </label>
+        <p id="projectHint" class="hint"></p>
       </section>
-
-      <section class="stats-grid">
-        <article class="panel stat">
-          <p class="label">Total Worked</p>
-          <p id="totalWorked" class="value">0h 0m</p>
-        </article>
-        <article class="panel stat">
-          <p class="label">Year Avg / Active Week</p>
-          <p id="yearAvg" class="value">0h 0m</p>
-        </article>
-        <article class="panel stat">
-          <p class="label">Week So Far</p>
-          <p id="weekSoFar" class="value">0h 0m</p>
-        </article>
-        <article class="panel stat">
-          <p class="label">Day So Far</p>
-          <p id="daySoFar" class="value">0h 0m</p>
-        </article>
-        <article class="panel stat">
-          <p class="label">Day Break</p>
-          <p id="dayBreak" class="value">0h 0m</p>
-        </article>
-      </section>
-
-      <details class="panel accordion" open>
-        <summary>Project Time Breakdown</summary>
-        <div class="project-times-wrap">
-          <table class="project-table" aria-label="Project time totals">
-            <thead>
-              <tr>
-                <th scope="col">Project</th>
-                <th scope="col">Day</th>
-                <th scope="col">Week</th>
-                <th scope="col">Total</th>
-              </tr>
-            </thead>
-            <tbody id="projectTimesBody"></tbody>
-          </table>
-        </div>
-      </details>
-
-      <details class="panel accordion">
-        <summary>Settings</summary>
-        <div class="settings-grid">
-          <label class="field">
-            <span>Target Hours / Week</span>
-            <input id="targetHoursInput" type="number" min="1" step="0.5" />
-          </label>
-          <label class="field">
-            <span>Allowed Break Minutes / 8h Work</span>
-            <input id="breakCapInput" type="number" min="0" step="1" />
-          </label>
-        </div>
-        <button id="saveSettingsBtn" class="btn" type="button">Save Settings</button>
-        <p id="settingsHint" class="hint"></p>
-      </details>
-
-      <details class="panel accordion">
-        <summary>Data</summary>
-        <div class="actions-grid">
-          <button id="exportBtn" class="btn" type="button">Export JSON</button>
-          <button id="exportProjectCsvBtn" class="btn" type="button">Export Project CSV</button>
-          <label class="btn file-btn" for="importInput">Import JSON</label>
-          <input id="importInput" type="file" accept="application/json" hidden />
-        </div>
-        <p id="dataHint" class="hint"></p>
-      </details>
     </main>
+
+    <aside id="projectOverlay" class="menu-overlay" aria-hidden="true">
+      <section class="menu-sheet">
+        <header class="menu-header">
+          <h2>Projects</h2>
+          <button id="projectCloseBtn" class="btn" type="button">Close</button>
+        </header>
+
+        <section class="menu-section">
+          <h3>Project Totals</h3>
+          <div id="projectBreakdownList" class="project-breakdown-list"></div>
+          <div class="actions-grid">
+            <button id="exportProjectCsvBtn" class="btn" type="button">Export Project CSV</button>
+          </div>
+          <p id="projectDataHint" class="hint"></p>
+        </section>
+      </section>
+    </aside>
+
+    <aside id="settingsOverlay" class="menu-overlay" aria-hidden="true">
+      <section class="menu-sheet">
+        <header class="menu-header">
+          <h2>Settings</h2>
+          <button id="settingsCloseBtn" class="btn" type="button">Close</button>
+        </header>
+
+        <section class="menu-section">
+          <h3>Tracking</h3>
+          <div class="settings-grid">
+            <label class="field">
+              <span>Target Hours / Week</span>
+              <input id="targetHoursInput" type="number" min="1" step="0.5" />
+            </label>
+            <label class="field">
+              <span>Tracking Start Date</span>
+              <input id="startDateInput" type="date" />
+            </label>
+            <label class="field">
+              <span>Paid Break Every (hours)</span>
+              <input id="breakIntervalHoursInput" type="number" min="0.25" step="0.25" />
+            </label>
+            <label class="field">
+              <span>Paid Break Length (minutes)</span>
+              <input id="paidBreakMinutesInput" type="number" min="0" step="1" />
+            </label>
+          </div>
+          <button id="saveSettingsBtn" class="btn" type="button">Save Settings</button>
+          <p id="settingsHint" class="hint"></p>
+        </section>
+
+        <section class="menu-section">
+          <h3>Data</h3>
+          <div class="actions-grid">
+            <button id="exportBtn" class="btn" type="button">Export JSON</button>
+            <label class="btn file-btn" for="importInput">Import JSON</label>
+            <input id="importInput" type="file" accept="application/json" hidden />
+          </div>
+          <p id="jsonHint" class="hint"></p>
+        </section>
+      </section>
+    </aside>
 
     <script src="app.js"></script>
   </body>
