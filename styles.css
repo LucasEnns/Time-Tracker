@@ -158,6 +158,70 @@ input[list] {
   margin: 0 0 10px;
 }
 
+.accordion {
+  padding-top: 10px;
+}
+
+.accordion summary {
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.accordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.accordion summary::after {
+  content: '+';
+  font-size: 1.2rem;
+  color: var(--muted);
+}
+
+.accordion[open] summary::after {
+  content: '-';
+}
+
+.accordion > *:not(summary) {
+  margin-top: 10px;
+}
+
+.project-times-wrap {
+  overflow-x: auto;
+}
+
+.project-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 420px;
+}
+
+.project-table th,
+.project-table td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid #d8e6df;
+}
+
+.project-table th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.project-table td:last-child,
+.project-table th:last-child,
+.project-table td:nth-child(2),
+.project-table th:nth-child(2),
+.project-table td:nth-child(3),
+.project-table th:nth-child(3) {
+  text-align: right;
+}
+
 .settings-grid,
 .actions-grid {
   display: grid;
@@ -190,5 +254,9 @@ input[list] {
   .settings-grid,
   .actions-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .project-table {
+    min-width: 0;
   }
 }

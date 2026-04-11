@@ -59,8 +59,25 @@
         </article>
       </section>
 
-      <section class="panel settings">
-        <h2>Settings</h2>
+      <details class="panel accordion" open>
+        <summary>Project Time Breakdown</summary>
+        <div class="project-times-wrap">
+          <table class="project-table" aria-label="Project time totals">
+            <thead>
+              <tr>
+                <th scope="col">Project</th>
+                <th scope="col">Day</th>
+                <th scope="col">Week</th>
+                <th scope="col">Total</th>
+              </tr>
+            </thead>
+            <tbody id="projectTimesBody"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <details class="panel accordion">
+        <summary>Settings</summary>
         <div class="settings-grid">
           <label class="field">
             <span>Target Hours / Week</span>
@@ -73,17 +90,18 @@
         </div>
         <button id="saveSettingsBtn" class="btn" type="button">Save Settings</button>
         <p id="settingsHint" class="hint"></p>
-      </section>
+      </details>
 
-      <section class="panel actions">
-        <h2>Data</h2>
+      <details class="panel accordion">
+        <summary>Data</summary>
         <div class="actions-grid">
           <button id="exportBtn" class="btn" type="button">Export JSON</button>
+          <button id="exportProjectCsvBtn" class="btn" type="button">Export Project CSV</button>
           <label class="btn file-btn" for="importInput">Import JSON</label>
           <input id="importInput" type="file" accept="application/json" hidden />
         </div>
         <p id="dataHint" class="hint"></p>
-      </section>
+      </details>
     </main>
 
     <script src="app.js"></script>

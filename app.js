@@ -23,11 +23,13 @@ const el = {
   yearAvg: document.getElementById('yearAvg'),
   weekSoFar: document.getElementById('weekSoFar'),
   daySoFar: document.getElementById('daySoFar'),
+  projectTimesBody: document.getElementById('projectTimesBody'),
   targetHoursInput: document.getElementById('targetHoursInput'),
   breakCapInput: document.getElementById('breakCapInput'),
   saveSettingsBtn: document.getElementById('saveSettingsBtn'),
   settingsHint: document.getElementById('settingsHint'),
   exportBtn: document.getElementById('exportBtn'),
+  exportProjectCsvBtn: document.getElementById('exportProjectCsvBtn'),
   importInput: document.getElementById('importInput'),
   dataHint: document.getElementById('dataHint'),
 }
@@ -45,8 +47,16 @@ function bindEvents() {
   el.startStopBtn.addEventListener('click', onStartStop)
   el.modeWorkBtn.addEventListener('click', () => onChangeMode('work'))
   el.modeBreakBtn.addEventListener('click', () => onChangeMode('break'))
+  el.projectInput.addEventListener('change', onProjectChanged)
+  el.projectInput.addEventListener('blur', onProjectChanged)
+  el.projectInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      onProjectChanged()
+    }
+  })
   el.saveSettingsBtn.addEventListener('click', onSaveSettings)
   el.exportBtn.addEventListener('click', onExportJson)
+  el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
   el.importInput.addEventListener('change', onImportJson)
 }
 
@@ -58,7 +68,7 @@ function hydrateInputs() {
 
 function onStartStop() {
   if (state.activeSession) {
-    closeActiveSession()
+    closeActiveSession({ keepRun: false })
     setHint(el.dataHint, 'Session stopped.')
   } else {
     startSession(selectedMode, getProjectInput())
@@ -75,11 +85,27 @@ function onChangeMode(mode) {
   selectedMode = mode
 
   if (state.activeSession && state.activeSession.mode !== mode) {
-    closeActiveSession()
-    startSession(mode, getProjectInput())
+    closeActiveSession({ keepRun: true })
+    startSession(mode, getProjectInput(), { keepRun: true })
     setHint(el.dataHint, `Switched to ${mode} mode and split session.`)
   }
 
+  render()
+}
+
+function onProjectChanged() {
+  if (!state.activeSession) {
+    return
+  }
+
+  const nextProject = getProjectInput()
+  if (nextProject === state.activeSession.project) {
+    return
+  }
+
+  closeActiveSession({ keepRun: true })
+  startSession(selectedMode, nextProject, { keepRun: true })
+  setHint(el.dataHint, `Switched project to ${nextProject}.`)
   render()
 }
 
@@ -117,6 +143,26 @@ function onExportJson() {
   setHint(el.dataHint, 'Exported JSON backup.')
 }
 
+function onExportProjectCsv() {
+  const now = new Date()
+  const sessions = materializeSessionsForNow()
+  const rows = getProjectBreakdownRows(sessions, now)
+
+  const header = ['Project', 'Day', 'Week', 'Total']
+  const csvRows = [header, ...rows.map((row) => [row.project, row.day, row.week, row.total])]
+  const csv = csvRows.map((row) => row.map(csvEscape).join(',')).join('\n')
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const stamp = new Date().toISOString().slice(0, 10)
+  a.href = url
+  a.download = `time-tracker-project-breakdown-${stamp}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  setHint(el.dataHint, 'Exported project breakdown CSV.')
+}
+
 async function onImportJson(event) {
   const file = event.target.files?.[0]
   if (!file) {
@@ -147,8 +193,14 @@ async function onImportJson(event) {
   }
 }
 
-function startSession(mode, project) {
+function startSession(mode, project, options = {}) {
   const now = Date.now()
+  const keepRun = Boolean(options.keepRun)
+
+  if (!keepRun || !state.activeRunStart) {
+    state.activeRunStart = now
+  }
+
   state.activeSession = {
     id: createId(),
     start: now,
@@ -159,10 +211,12 @@ function startSession(mode, project) {
   ensureTicker()
 }
 
-function closeActiveSession() {
+function closeActiveSession(options = {}) {
   if (!state.activeSession) {
     return
   }
+
+  const keepRun = Boolean(options.keepRun)
 
   const now = Date.now()
   const session = {
@@ -176,6 +230,9 @@ function closeActiveSession() {
 
   state.sessions.push(session)
   state.activeSession = null
+  if (!keepRun) {
+    state.activeRunStart = null
+  }
   saveState()
   ensureTicker()
 }
@@ -231,34 +288,72 @@ function renderLiveTimer() {
     return
   }
 
-  const elapsedMs = Date.now() - state.activeSession.start
+  const elapsedMs = Date.now() - (state.activeRunStart || state.activeSession.start)
   el.liveTimer.textContent = formatClock(elapsedMs)
 }
 
 function renderStats() {
   const now = new Date()
   const sessions = materializeSessionsForNow()
+  const settings = state.settings
 
-  const total = computeEffectiveWorkedMs(sessions, state.settings)
-  const day = computeEffectiveWorkedMs(
-    filterByRange(sessions, startOfDay(now), now),
-    state.settings,
-  )
+  const total = computeEffectiveWorkedMs(sessions, settings)
+  const day = computeEffectiveWorkedMs(filterByRange(sessions, startOfDay(now), now), settings)
   const week = computeEffectiveWorkedMs(
-    filterByRange(sessions, startOfWeek(now, state.settings.weekStartsOn), now),
-    state.settings,
+    filterByRange(sessions, startOfWeek(now, settings.weekStartsOn), now),
+    settings,
   )
 
   const yearStart = new Date(now.getFullYear(), 0, 1)
   const yearSessions = filterByRange(sessions, yearStart, now)
-  const activeWeeks = countActiveWeeks(yearSessions, state.settings.weekStartsOn)
-  const yearTotal = computeEffectiveWorkedMs(yearSessions, state.settings)
+  const activeWeeks = countActiveWeeks(yearSessions, settings.weekStartsOn)
+  const yearTotal = computeEffectiveWorkedMs(yearSessions, settings)
   const avgYearWeek = activeWeeks > 0 ? yearTotal / activeWeeks : 0
 
   el.totalWorked.textContent = formatDuration(total)
   el.daySoFar.textContent = formatDuration(day)
   el.weekSoFar.textContent = formatDuration(week)
   el.yearAvg.textContent = formatDuration(avgYearWeek)
+
+  renderProjectBreakdown(sessions, now)
+}
+
+function renderProjectBreakdown(sessions, now) {
+  const rows = getProjectBreakdownRows(sessions, now)
+
+  el.projectTimesBody.innerHTML = ''
+
+  for (const rowData of rows) {
+    const row = document.createElement('tr')
+    row.innerHTML = `
+      <td>${escapeHtml(rowData.project)}</td>
+      <td>${rowData.day}</td>
+      <td>${rowData.week}</td>
+      <td>${rowData.total}</td>
+    `
+    el.projectTimesBody.appendChild(row)
+  }
+}
+
+function getProjectBreakdownRows(sessions, now) {
+  const projects = [...collectProjects(sessions, state.activeSession)].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  const daySessions = filterByRange(sessions, startOfDay(now), now)
+  const weekSessions = filterByRange(sessions, startOfWeek(now, state.settings.weekStartsOn), now)
+
+  return projects.map((project) => {
+    const projectAll = sessions.filter((session) => session.project === project)
+    const projectDay = daySessions.filter((session) => session.project === project)
+    const projectWeek = weekSessions.filter((session) => session.project === project)
+
+    return {
+      project,
+      day: formatDuration(computeEffectiveWorkedMs(projectDay, state.settings)),
+      week: formatDuration(computeEffectiveWorkedMs(projectWeek, state.settings)),
+      total: formatDuration(computeEffectiveWorkedMs(projectAll, state.settings)),
+    }
+  })
 }
 
 function getProjectInput() {
@@ -311,20 +406,40 @@ function filterByRange(sessions, startDate, endDate) {
 }
 
 function computeEffectiveWorkedMs(sessions, settings) {
-  let workMs = 0
-  let breakMs = 0
+  const byDay = new Map()
+  const todayKey = dayKey(new Date())
+  let totalMs = 0
 
   for (const session of sessions) {
+    const key = dayKey(new Date(session.start))
+    const entry = byDay.get(key) || { workMs: 0, breakMs: 0 }
+
     if (session.mode === 'work') {
-      workMs += session.durationMs
+      entry.workMs += session.durationMs
     } else if (session.mode === 'break') {
-      breakMs += session.durationMs
+      entry.breakMs += session.durationMs
     }
+
+    byDay.set(key, entry)
   }
 
-  const allowedBreakMs = (workMs / (8 * 60 * 60 * 1000)) * settings.breakMinutesPer8h * 60 * 1000
-  const excessBreakMs = Math.max(0, breakMs - allowedBreakMs)
-  return Math.max(0, workMs - excessBreakMs)
+  for (const [key, entry] of byDay.entries()) {
+    if (key === todayKey) {
+      totalMs += entry.workMs
+      continue
+    }
+
+    const allowedBreakMs =
+      (entry.workMs / (8 * 60 * 60 * 1000)) * settings.breakMinutesPer8h * 60 * 1000
+    const excessBreakMs = Math.max(0, entry.breakMs - allowedBreakMs)
+    totalMs += Math.max(0, entry.workMs - excessBreakMs)
+  }
+
+  return totalMs
+}
+
+function dayKey(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
 function startOfDay(date) {
@@ -363,6 +478,20 @@ function formatDuration(ms) {
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
   return `${hours}h ${minutes}m`
+}
+
+function escapeHtml(value) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function csvEscape(value) {
+  const text = String(value)
+  return `"${text.replaceAll('"', '""')}"`
 }
 
 function pad(n) {
@@ -406,6 +535,7 @@ function saveState() {
     settings: state.settings,
     sessions: state.sessions,
     activeSession: state.activeSession,
+    activeRunStart: state.activeRunStart,
     updatedAt: Date.now(),
   }
 
@@ -418,6 +548,7 @@ function defaultState() {
     settings: { ...DEFAULT_SETTINGS },
     sessions: [],
     activeSession: null,
+    activeRunStart: null,
     updatedAt: Date.now(),
   }
 }
@@ -436,12 +567,17 @@ function normalizeImportedState(input) {
     : []
 
   const activeSession = normalizeActiveSession(input?.activeSession)
+  const activeRunStart =
+    Number.isFinite(Number(input?.activeRunStart)) && Number(input.activeRunStart) > 0
+      ? Number(input.activeRunStart)
+      : activeSession?.start || null
 
   return {
     version: APP_VERSION,
     settings,
     sessions,
     activeSession,
+    activeRunStart,
     updatedAt: Date.now(),
   }
 }
