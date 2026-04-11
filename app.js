@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
 let state = loadState()
 let selectedMode = state.activeSession?.mode || 'work'
 let tickInterval = null
+let projectInputPrevious = state.activeSession?.project || 'General'
 
 const el = {
   liveTimer: document.getElementById('liveTimer'),
@@ -18,11 +19,12 @@ const el = {
   modeWorkBtn: document.getElementById('modeWorkBtn'),
   modeBreakBtn: document.getElementById('modeBreakBtn'),
   projectInput: document.getElementById('projectInput'),
-  projectList: document.getElementById('projectList'),
+  projectDropdown: document.getElementById('projectDropdown'),
   totalWorked: document.getElementById('totalWorked'),
   yearAvg: document.getElementById('yearAvg'),
   weekSoFar: document.getElementById('weekSoFar'),
   daySoFar: document.getElementById('daySoFar'),
+  dayBreak: document.getElementById('dayBreak'),
   projectTimesBody: document.getElementById('projectTimesBody'),
   targetHoursInput: document.getElementById('targetHoursInput'),
   breakCapInput: document.getElementById('breakCapInput'),
@@ -48,12 +50,18 @@ function bindEvents() {
   el.modeWorkBtn.addEventListener('click', () => onChangeMode('work'))
   el.modeBreakBtn.addEventListener('click', () => onChangeMode('break'))
   el.projectInput.addEventListener('change', onProjectChanged)
-  el.projectInput.addEventListener('blur', onProjectChanged)
+  el.projectInput.addEventListener('blur', onProjectInputBlur)
+  el.projectInput.addEventListener('focus', () => {
+    projectInputPrevious = getProjectInput()
+    showProjectDropdown()
+  })
+  el.projectInput.addEventListener('input', showProjectDropdown)
   el.projectInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       onProjectChanged()
     }
   })
+  document.addEventListener('click', onDocumentClick)
   el.saveSettingsBtn.addEventListener('click', onSaveSettings)
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
@@ -64,6 +72,7 @@ function hydrateInputs() {
   el.targetHoursInput.value = String(state.settings.targetHoursPerWeek)
   el.breakCapInput.value = String(state.settings.breakMinutesPer8h)
   el.projectInput.value = state.activeSession?.project || 'General'
+  projectInputPrevious = getProjectInput()
 }
 
 function onStartStop() {
@@ -94,19 +103,56 @@ function onChangeMode(mode) {
 }
 
 function onProjectChanged() {
+  const nextProject = getProjectInput()
+  const knownProjects = new Set(collectProjects(state.sessions, state.activeSession))
+
   if (!state.activeSession) {
+    const previousProject = projectInputPrevious
+    if (
+      previousProject &&
+      previousProject !== nextProject &&
+      knownProjects.has(previousProject) &&
+      !knownProjects.has(nextProject)
+    ) {
+      const renamedCount = renameProjectEverywhere(previousProject, nextProject)
+      saveState()
+      setHint(
+        el.dataHint,
+        `Renamed ${previousProject} to ${nextProject} (${renamedCount} records).`,
+      )
+      render()
+    }
+    projectInputPrevious = nextProject
     return
   }
 
-  const nextProject = getProjectInput()
-  if (nextProject === state.activeSession.project) {
+  const currentProject = state.activeSession.project
+  if (nextProject === currentProject) {
+    projectInputPrevious = nextProject
     return
   }
 
   closeActiveSession({ keepRun: true })
   startSession(selectedMode, nextProject, { keepRun: true })
   setHint(el.dataHint, `Switched project to ${nextProject}.`)
+  projectInputPrevious = nextProject
   render()
+}
+
+function onProjectInputBlur() {
+  // Delay allows pointer selection from the custom dropdown.
+  setTimeout(() => {
+    onProjectChanged()
+    hideProjectDropdown()
+  }, 120)
+}
+
+function onDocumentClick(event) {
+  const target = event.target
+  if (target === el.projectInput || el.projectDropdown.contains(target)) {
+    return
+  }
+  hideProjectDropdown()
 }
 
 function onSaveSettings() {
@@ -270,16 +316,38 @@ function renderModeButtons() {
 }
 
 function renderProjects() {
-  const projects = [...collectProjects(state.sessions, state.activeSession)].sort((a, b) =>
-    a.localeCompare(b),
-  )
+  const projects = getProjectsByLastUse(state.sessions, state.activeSession)
+  el.projectDropdown.innerHTML = ''
 
-  el.projectList.innerHTML = ''
   for (const project of projects) {
-    const option = document.createElement('option')
-    option.value = project
-    el.projectList.appendChild(option)
+    const option = document.createElement('button')
+    option.type = 'button'
+    option.className = 'project-option'
+    option.textContent = project
+    option.setAttribute('role', 'option')
+    option.addEventListener('mousedown', (event) => {
+      event.preventDefault()
+      selectProjectFromDropdown(project)
+    })
+    el.projectDropdown.appendChild(option)
   }
+}
+
+function selectProjectFromDropdown(project) {
+  el.projectInput.value = project
+  onProjectChanged()
+  hideProjectDropdown()
+}
+
+function showProjectDropdown() {
+  if (!el.projectDropdown.children.length) {
+    return
+  }
+  el.projectDropdown.classList.add('open')
+}
+
+function hideProjectDropdown() {
+  el.projectDropdown.classList.remove('open')
 }
 
 function renderLiveTimer() {
@@ -296,13 +364,15 @@ function renderStats() {
   const now = new Date()
   const sessions = materializeSessionsForNow()
   const settings = state.settings
+  const daySessions = filterByRange(sessions, startOfDay(now), now)
 
   const total = computeEffectiveWorkedMs(sessions, settings)
-  const day = computeEffectiveWorkedMs(filterByRange(sessions, startOfDay(now), now), settings)
+  const day = computeEffectiveWorkedMs(daySessions, settings)
   const week = computeEffectiveWorkedMs(
     filterByRange(sessions, startOfWeek(now, settings.weekStartsOn), now),
     settings,
   )
+  const dayBreakMs = sumDurationByMode(daySessions, 'break')
 
   const yearStart = new Date(now.getFullYear(), 0, 1)
   const yearSessions = filterByRange(sessions, yearStart, now)
@@ -312,6 +382,7 @@ function renderStats() {
 
   el.totalWorked.textContent = formatDuration(total)
   el.daySoFar.textContent = formatDuration(day)
+  el.dayBreak.textContent = formatDuration(dayBreakMs)
   el.weekSoFar.textContent = formatDuration(week)
   el.yearAvg.textContent = formatDuration(avgYearWeek)
 
@@ -438,6 +509,16 @@ function computeEffectiveWorkedMs(sessions, settings) {
   return totalMs
 }
 
+function sumDurationByMode(sessions, mode) {
+  let total = 0
+  for (const session of sessions) {
+    if (session.mode === mode) {
+      total += session.durationMs
+    }
+  }
+  return total
+}
+
 function dayKey(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
@@ -513,6 +594,49 @@ function collectProjects(sessions, activeSession) {
     projects.add(activeSession.project)
   }
   return projects
+}
+
+function renameProjectEverywhere(oldName, newName) {
+  if (!oldName || !newName || oldName === newName) {
+    return 0
+  }
+
+  let count = 0
+  for (const session of state.sessions) {
+    if (session.project === oldName) {
+      session.project = newName
+      count += 1
+    }
+  }
+
+  if (state.activeSession?.project === oldName) {
+    state.activeSession.project = newName
+  }
+
+  return count
+}
+
+function getProjectsByLastUse(sessions, activeSession) {
+  const latestByProject = new Map([['General', 0]])
+
+  for (const session of sessions) {
+    if (!session.project) {
+      continue
+    }
+
+    const project = session.project
+    const timestamp = Number.isFinite(session.end) ? session.end : session.start
+    const current = latestByProject.get(project) || 0
+    latestByProject.set(project, Math.max(current, timestamp))
+  }
+
+  if (activeSession?.project) {
+    latestByProject.set(activeSession.project, Date.now())
+  }
+
+  return [...latestByProject.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([project]) => project)
 }
 
 function loadState() {

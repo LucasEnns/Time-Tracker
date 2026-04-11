@@ -35,8 +35,25 @@
 
         <label class="field">
           <span>Project</span>
-          <input id="projectInput" list="projectList" placeholder="General" maxlength="80" />
-          <datalist id="projectList"></datalist>
+          <div class="project-input-wrap">
+            <input
+              id="projectInput"
+              type="text"
+              placeholder="General"
+              maxlength="80"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false" />
+            <div
+              id="projectDropdown"
+              class="project-dropdown"
+              role="listbox"
+              aria-label="Recent projects"></div>
+          </div>
+          <small class="field-note"
+            >Select existing or type a new one. When stopped, renaming updates past records.</small
+          >
         </label>
       </section>
 
@@ -56,6 +73,10 @@
         <article class="panel stat">
           <p class="label">Day So Far</p>
           <p id="daySoFar" class="value">0h 0m</p>
+        </article>
+        <article class="panel stat">
+          <p class="label">Day Break</p>
+          <p id="dayBreak" class="value">0h 0m</p>
         </article>
       </section>
 
