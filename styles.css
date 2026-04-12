@@ -218,6 +218,14 @@ select:focus-visible {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+.project-option-addnew {
+  font-weight: 700;
+}
+
+.project-option-muted {
+  color: var(--muted);
+}
+
 .project-option:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
@@ -226,6 +234,7 @@ select:focus-visible {
 input[type='text'],
 input[type='number'],
 input[type='date'],
+input[type='time'],
 select {
   display: block;
   min-width: 0;
@@ -247,7 +256,17 @@ input[type='date'] {
   padding-right: 10px;
 }
 
+input[type='time'] {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 10px;
+}
+
 input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+input[type='time']::-webkit-date-and-time-value {
   text-align: left;
 }
 
@@ -296,6 +315,130 @@ input[type='date']::-webkit-date-and-time-value {
 .project-breakdown-list {
   display: grid;
   gap: 8px;
+}
+
+.recent-entries-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.recent-entry-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.recent-entry-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recent-entry-project {
+  font-weight: 700;
+}
+
+.recent-entry-time {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.recent-entry-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.recent-entry-actions .btn {
+  flex: 1;
+}
+
+.recent-entry-running {
+  font-size: 0.75rem;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 700;
+}
+
+.entry-edit-panel {
+  display: none;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.entry-edit-panel.open {
+  display: grid;
+}
+
+.entry-edit-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.entry-edit-grid .field {
+  margin-top: 0;
+}
+
+.btn-danger {
+  border-color: color-mix(in srgb, #d3304f 50%, var(--border) 50%);
+  color: #fff;
+  background: #d3304f;
+}
+
+.btn-danger:active {
+  background: #b92640;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(4, 11, 20, 0.45);
+  z-index: 65;
+}
+
+.confirm-overlay.open {
+  display: flex;
+}
+
+.confirm-card {
+  width: min(100%, 440px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.confirm-card h3 {
+  margin: 0;
+}
+
+.confirm-message,
+.confirm-note {
+  margin: 0;
+  color: var(--muted);
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm-actions .btn {
+  flex: 1;
 }
 
 .project-breakdown-row {
@@ -411,5 +554,13 @@ input[type='date']::-webkit-date-and-time-value {
   .settings-grid,
   .actions-grid {
     grid-template-columns: 1fr 1fr;
+    row-gap: 10px;
+    column-gap: 20px;
+  }
+
+  .entry-edit-grid {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 10px;
+    column-gap: 20px;
   }
 }

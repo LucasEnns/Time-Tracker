@@ -1,51 +1,81 @@
 # Time Tracker
 
-Simple mobile-first time tracking app for GitHub Pages.
+Client-side work tracker optimized for mobile and hosted on GitHub Pages.
 
-## Features
+Live app: https://lucasenns.github.io/Time-Tracker/
 
-- Start/Stop timer
-- Work/Break mode toggle
-- Project field (with suggestions from previous entries)
-- Local persistence via `localStorage`
-- Stats:
-  - Total worked (effective)
-  - Year average per active week
-  - Week so far
+## What It Does
+
+- Clock in / clock out tracking with a live timer.
+- Project-based tracking with reusable project names.
+- Paid break awards automatically added at a configurable interval.
+- Dashboard metrics:
   - Day so far
-- Rules:
-  - Configure target hours per week
-  - Configure allowed break minutes per 8h of work
-  - Break over cap is subtracted from reported worked time
-- JSON export/import for backup or migration
+  - Week so far
+  - Avg per active week (since start)
+  - Over/under vs target (week and since start)
+- Since-start metrics exclude the current week so partial-week values do not skew long-range stats.
+- Full-screen overlays for Projects and Settings.
+- Light and dark mode via system preference.
+- English/French UI support based on browser language.
 
-## Data Model
+## Recent Entries Editor (Last 14 Days)
 
-Stored under key `time-tracker-v1`:
+- Add backfilled entries with date, project, start, and optional end time.
+- Optional end time can start a running session from a past start time.
+- Inline edit/save/cancel (no browser prompt popups).
+- One editor row open at a time.
+- Inline delete with confirmation overlay.
 
-- `version`
-- `settings`
-  - `targetHoursPerWeek`
-  - `breakMinutesPer8h`
-  - `weekStartsOn` (fixed to Monday)
-- `sessions[]`
-  - `id`, `start`, `end`, `mode`, `project`, `durationMs`
-- `activeSession`
+## Project Handling
 
-## Local Run
+- Project pickers support:
+  - selecting existing projects
+  - explicit + Add New Project mode
+- Existing project names can still be renamed where applicable.
 
-Open `index.html` directly in a browser.
+## Settings
 
-## Deploy To GitHub Pages
+- Target hours per week
+- Target days per week
+- First day of week (Sunday-Saturday)
+- Tracking start date
+- Paid break interval (hours)
+- Paid break length (minutes)
 
-1. Push this folder to a GitHub repo named `Time-Tracker`.
-2. In GitHub: **Settings > Pages**.
-3. Set source to **Deploy from a branch**.
-4. Select branch `main` and folder `/ (root)`.
-5. Save and wait for the Pages URL.
+## Data Storage
 
-## Notes
+- Stored locally in browser localStorage under key `time-tracker-v2`.
+- Main saved shape:
+  - `version`
+  - `settings`
+    - `targetHoursPerWeek`
+    - `targetDaysPerWeek`
+    - `weekStartsOn`
+    - `trackingStartDate`
+    - `paidBreakIntervalHours`
+    - `paidBreakMinutes`
+  - `sessions[]`
+    - `id`, `start`, `end`, `project`, `durationMs`
+  - `paidBreakAwards[]`
+    - `id`, `at`, `project`, `durationMs`
+  - `activeSession`
+  - `activeRunStart`
+  - `activeBreaksGranted`
+  - `lastProject`
 
-- Import merges sessions by `id` and skips duplicates.
-- Active session is not imported intentionally (to avoid phantom running sessions).
-- This app is fully client-side and works offline after initial load.
+## Import / Export
+
+- Export JSON backup from Settings.
+- Import JSON merges by record `id` (does not duplicate existing ids).
+- Export Project CSV from Projects.
+
+## Run Locally
+
+Open [index.html](index.html) directly in a browser.
+
+## Deploy / Update GitHub Pages
+
+1. Push to `main`.
+2. In GitHub, open repository Settings > Pages.
+3. Ensure source is Deploy from a branch, branch `main`, folder `/ (root)`.

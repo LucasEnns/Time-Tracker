@@ -1,0 +1,299 @@
+{
+  "version": 2,
+  "settings": {
+    "targetHoursPerWeek": 40,
+    "targetDaysPerWeek": 5,
+    "trackingStartDate": "2026-02-09",
+    "paidBreakIntervalHours": 3.75,
+    "paidBreakMinutes": 15,
+    "weekStartsOn": 1
+  },
+  "sessions": [
+    {
+      "id": "s-0-0-580671948",
+      "start": 1770648060000,
+      "end": 1770674267423,
+      "project": "General",
+      "durationMs": 26207423
+    },
+    {
+      "id": "s-0-1-833779911",
+      "start": 1770730920000,
+      "end": 1770765193643,
+      "project": "Ops Automation",
+      "durationMs": 34273643
+    },
+    {
+      "id": "s-0-2-612642920",
+      "start": 1770820200000,
+      "end": 1770850817581,
+      "project": "Internal Tools",
+      "durationMs": 30617581
+    },
+    {
+      "id": "s-0-3-890743645",
+      "start": 1770907380000,
+      "end": 1770937928348,
+      "project": "General",
+      "durationMs": 30548348
+    },
+    {
+      "id": "s-0-4-479369390",
+      "start": 1770989400000,
+      "end": 1771020087825,
+      "project": "Ops Automation",
+      "durationMs": 30687825
+    },
+    {
+      "id": "s-1-0-637691484",
+      "start": 1771252920000,
+      "end": 1771281853489,
+      "project": "Ops Automation",
+      "durationMs": 28933489
+    },
+    {
+      "id": "s-1-1-732138056",
+      "start": 1771339260000,
+      "end": 1771369660403,
+      "project": "Internal Tools",
+      "durationMs": 30400403
+    },
+    {
+      "id": "s-1-2-728785398",
+      "start": 1771422240000,
+      "end": 1771445546860,
+      "project": "General",
+      "durationMs": 23306860
+    },
+    {
+      "id": "s-1-3-302273813",
+      "start": 1771510680000,
+      "end": 1771541996931,
+      "project": "Ops Automation",
+      "durationMs": 31316931
+    },
+    {
+      "id": "s-1-4-547565140",
+      "start": 1771597920000,
+      "end": 1771623115524,
+      "project": "Internal Tools",
+      "durationMs": 25195524
+    },
+    {
+      "id": "s-2-0-804594245",
+      "start": 1771853700000,
+      "end": 1771884034266,
+      "project": "Marketing Site",
+      "durationMs": 30334266
+    },
+    {
+      "id": "s-2-1-567775826",
+      "start": 1771940580000,
+      "end": 1771963901800,
+      "project": "Internal Tools",
+      "durationMs": 23321800
+    },
+    {
+      "id": "s-2-2-98533462",
+      "start": 1772026140000,
+      "end": 1772052856263,
+      "project": "Ops Automation",
+      "durationMs": 26716263
+    },
+    {
+      "id": "s-2-3-572474078",
+      "start": 1772115600000,
+      "end": 1772146498495,
+      "project": "Marketing Site",
+      "durationMs": 30898495
+    },
+    {
+      "id": "s-2-4-403337686",
+      "start": 1772201820000,
+      "end": 1772224702646,
+      "project": "Internal Tools",
+      "durationMs": 22882646
+    },
+    {
+      "id": "s-3-0-153319392",
+      "start": 1772458500000,
+      "end": 1772492246514,
+      "project": "Internal Tools",
+      "durationMs": 33746514
+    },
+    {
+      "id": "s-3-1-881876308",
+      "start": 1772545140000,
+      "end": 1772572980893,
+      "project": "General",
+      "durationMs": 27840893
+    },
+    {
+      "id": "s-3-2-280429441",
+      "start": 1772630880000,
+      "end": 1772661518520,
+      "project": "Analytics",
+      "durationMs": 30638520
+    },
+    {
+      "id": "s-3-3-848700040",
+      "start": 1772718240000,
+      "end": 1772745900287,
+      "project": "Internal Tools",
+      "durationMs": 27660287
+    },
+    {
+      "id": "s-3-4-432378209",
+      "start": 1772807400000,
+      "end": 1772838546173,
+      "project": "General",
+      "durationMs": 31146173
+    },
+    {
+      "id": "s-4-0-56401195",
+      "start": 1773063780000,
+      "end": 1773089955237,
+      "project": "General",
+      "durationMs": 26175237
+    },
+    {
+      "id": "s-4-1-669500727",
+      "start": 1773145680000,
+      "end": 1773168187631,
+      "project": "Ops Automation",
+      "durationMs": 22507631
+    },
+    {
+      "id": "s-4-2-359552590",
+      "start": 1773235020000,
+      "end": 1773264503984,
+      "project": "Mobile QA",
+      "durationMs": 29483984
+    },
+    {
+      "id": "s-4-3-177594562",
+      "start": 1773322800000,
+      "end": 1773353623826,
+      "project": "General",
+      "durationMs": 30823826
+    },
+    {
+      "id": "s-4-4-831498322",
+      "start": 1773408780000,
+      "end": 1773430821084,
+      "project": "Ops Automation",
+      "durationMs": 22041084
+    },
+    {
+      "id": "s-5-0-697244236",
+      "start": 1773664560000,
+      "end": 1773691560650,
+      "project": "General",
+      "durationMs": 27000650
+    },
+    {
+      "id": "s-5-1-725506480",
+      "start": 1773755040000,
+      "end": 1773779859122,
+      "project": "Client Portal",
+      "durationMs": 24819122
+    },
+    {
+      "id": "s-5-2-147986686",
+      "start": 1773841440000,
+      "end": 1773864022375,
+      "project": "Marketing Site",
+      "durationMs": 22582375
+    },
+    {
+      "id": "s-5-3-553860542",
+      "start": 1773927720000,
+      "end": 1773958208718,
+      "project": "General",
+      "durationMs": 30488718
+    },
+    {
+      "id": "s-5-4-122855370",
+      "start": 1774013460000,
+      "end": 1774038390433,
+      "project": "Client Portal",
+      "durationMs": 24930433
+    },
+    {
+      "id": "s-6-0-828656058",
+      "start": 1774273380000,
+      "end": 1774305274582,
+      "project": "Client Portal",
+      "durationMs": 31894582
+    },
+    {
+      "id": "s-6-1-929664836",
+      "start": 1774359060000,
+      "end": 1774391771152,
+      "project": "Analytics",
+      "durationMs": 32711152
+    },
+    {
+      "id": "s-6-2-839741706",
+      "start": 1774444980000,
+      "end": 1774471324843,
+      "project": "Ops Automation",
+      "durationMs": 26344843
+    },
+    {
+      "id": "s-6-3-438192794",
+      "start": 1774527300000,
+      "end": 1774555831518,
+      "project": "Client Portal",
+      "durationMs": 28531518
+    },
+    {
+      "id": "s-6-4-12628934",
+      "start": 1774615440000,
+      "end": 1774650336593,
+      "project": "Analytics",
+      "durationMs": 34896593
+    },
+    {
+      "id": "s-7-0-346168660",
+      "start": 1774873140000,
+      "end": 1774903903657,
+      "project": "Mobile QA",
+      "durationMs": 30763657
+    },
+    {
+      "id": "s-7-1-131511873",
+      "start": 1774963320000,
+      "end": 1774992966281,
+      "project": "Ops Automation",
+      "durationMs": 29646281
+    },
+    {
+      "id": "s-7-2-547190236",
+      "start": 1775045940000,
+      "end": 1775070887088,
+      "project": "Analytics",
+      "durationMs": 24947088
+    },
+    {
+      "id": "s-7-3-375077753",
+      "start": 1775132520000,
+      "end": 1775160458875,
+      "project": "Mobile QA",
+      "durationMs": 27938875
+    },
+    {
+      "id": "s-7-4-967956811",
+      "start": 1775223720000,
+      "end": 1775246711577,
+      "project": "Ops Automation",
+      "durationMs": 22991577
+    }
+  ],
+  "paidBreakAwards": [],
+  "activeSession": null,
+  "lastProject": "Ops Automation",
+  "activeRunStart": null,
+  "activeBreaksGranted": 0,
+  "updatedAt": 1775997913742
+}

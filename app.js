@@ -13,6 +13,199 @@ const DEFAULT_SETTINGS = {
 let state = loadState()
 let tickInterval = null
 let projectInputPrevious = state.activeSession?.project || state.lastProject || 'General'
+let projectAddMode = false
+let entryProjectAddMode = false
+let openEntryEditorId = null
+let pendingDeleteEntryId = null
+
+const PROJECT_ADD_NEW_TOKEN = '__add_new__'
+const UI_LANGUAGE = String(navigator.language || 'en')
+  .toLowerCase()
+  .startsWith('fr')
+  ? 'fr'
+  : 'en'
+
+const I18N = {
+  en: {
+    appTitle: 'Work Tracker',
+    projectsBtn: 'Projects',
+    settingsBtn: 'Settings',
+    close: 'Close',
+    cancel: 'Cancel',
+    delete: 'Delete',
+    save: 'Save',
+    edit: 'Edit',
+    clockIn: 'Clock In',
+    clockOut: 'Clock Out',
+    activeProject: 'Active Project',
+    daySoFarLabel: 'Day So Far',
+    paidBreakToday: 'Paid Break Added Today',
+    weekSoFarLabel: 'Week So Far',
+    weekOverUnder: 'Week Over / Under Target',
+    avgActiveWeek: 'Avg / Active Week (Since Start)',
+    sinceStartOverUnder: 'Since Start Over / Under',
+    projectTotals: 'Project Totals',
+    exportProjectCsv: 'Export Project CSV',
+    recentEntries14: 'Recent Entries (Last 14 Days)',
+    date: 'Date',
+    project: 'Project',
+    startTime: 'Start Time',
+    endTime: 'End Time',
+    endTimeOptional: 'End Time (optional)',
+    addEntry: 'Add Entry',
+    deleteEntryTitle: 'Delete Entry?',
+    deleteForeverNote: 'This information will be lost forever.',
+    tracking: 'Tracking',
+    targetHoursWeek: 'Target Hours / Week',
+    targetDaysWeek: 'Target Days / Week',
+    firstDayOfWeek: 'First Day Of Week',
+    sunday: 'Sunday',
+    monday: 'Monday',
+    tuesday: 'Tuesday',
+    wednesday: 'Wednesday',
+    thursday: 'Thursday',
+    friday: 'Friday',
+    saturday: 'Saturday',
+    trackingStartDate: 'Tracking Start Date',
+    paidBreakEveryHours: 'Paid Break Every (hours)',
+    paidBreakLengthMin: 'Paid Break Length (minutes)',
+    saveSettings: 'Save Settings',
+    data: 'Data',
+    exportJson: 'Export JSON',
+    importJson: 'Import JSON',
+    general: 'General',
+    addNewProject: '+ Add New Project',
+    typeNewProject: 'Type a new project name to add it.',
+    alreadyExists: '{project} already exists.',
+    addedProject: 'Added project {project}.',
+    switchedProject: 'Switched project to {project}.',
+    renamedProject: 'Renamed {from} to {to} ({count} records).',
+    dateStartRequired: 'Date and start time are required.',
+    dateTimeRequired: 'Date, start time, and end time are required.',
+    startInvalid: 'Start time is invalid.',
+    startFuture: 'Start time cannot be in the future.',
+    endAfterStart: 'End time must be after start time.',
+    endFuture: 'End time cannot be in the future.',
+    outside14: 'Entry must be within the last 14 days.',
+    runningAlready: 'A timer is already running. Edit the running entry below instead.',
+    startedRunning: 'Started running entry for {project}.',
+    addedEntry: 'Added {project} entry.',
+    editDateStartRequired: 'Edit failed: date and start time are required.',
+    editStartInvalid: 'Edit failed: start time is invalid.',
+    editStartFuture: 'Edit failed: start time cannot be in the future.',
+    editOutside14: 'Edit failed: entry must stay within last 14 days.',
+    editEndAfterStart: 'Edit failed: end time must be after start time.',
+    editEndFuture: 'Edit failed: end time cannot be in the future.',
+    runningSaved: 'Running entry saved as a completed entry.',
+    runningUpdated: 'Running entry updated.',
+    entryUpdated: 'Entry updated.',
+    entryDeleted: 'Entry deleted.',
+    noEntries14: 'No work entries in the last 14 days.',
+    runningTag: 'Running',
+    runningWord: 'Running',
+    settingsSaved: 'Settings saved.',
+    targetHoursInvalid: 'Target hours/week must be greater than 0.',
+    breakIntervalInvalid: 'Break interval must be greater than 0 hours.',
+    targetDaysInvalid: 'Target days/week must be between 1 and 7.',
+    trackingDateInvalid: 'Tracking start date is invalid.',
+    weekStartInvalid: 'First day of week is invalid.',
+    paidBreakInvalid: 'Paid break minutes must be 0 or greater.',
+    exportJsonDone: 'Exported JSON backup.',
+    exportCsvDone: 'Exported project breakdown CSV.',
+    importFailed: 'Import failed: invalid file format.',
+    importDone: 'Imported {count} new records.',
+  },
+  fr: {
+    appTitle: 'Suivi du travail',
+    projectsBtn: 'Projets',
+    settingsBtn: 'Parametres',
+    close: 'Fermer',
+    cancel: 'Annuler',
+    delete: 'Supprimer',
+    save: 'Enregistrer',
+    edit: 'Modifier',
+    clockIn: 'Pointer entree',
+    clockOut: 'Pointer sortie',
+    activeProject: 'Projet actif',
+    daySoFarLabel: 'Aujourd hui',
+    paidBreakToday: 'Pause payee ajoutee aujourd hui',
+    weekSoFarLabel: 'Semaine en cours',
+    weekOverUnder: 'Ecart hebdo / cible',
+    avgActiveWeek: 'Moyenne / semaine active (depuis debut)',
+    sinceStartOverUnder: 'Ecart depuis debut',
+    projectTotals: 'Totaux par projet',
+    exportProjectCsv: 'Exporter CSV projets',
+    recentEntries14: 'Entrees recentes (14 derniers jours)',
+    date: 'Date',
+    project: 'Projet',
+    startTime: 'Heure de debut',
+    endTime: 'Heure de fin',
+    endTimeOptional: 'Heure de fin (optionnel)',
+    addEntry: 'Ajouter entree',
+    deleteEntryTitle: 'Supprimer l entree ?',
+    deleteForeverNote: 'Ces informations seront perdues definitivement.',
+    tracking: 'Suivi',
+    targetHoursWeek: 'Heures cible / semaine',
+    targetDaysWeek: 'Jours cibles / semaine',
+    firstDayOfWeek: 'Premier jour de la semaine',
+    sunday: 'Dimanche',
+    monday: 'Lundi',
+    tuesday: 'Mardi',
+    wednesday: 'Mercredi',
+    thursday: 'Jeudi',
+    friday: 'Vendredi',
+    saturday: 'Samedi',
+    trackingStartDate: 'Date de debut du suivi',
+    paidBreakEveryHours: 'Pause payee toutes les (heures)',
+    paidBreakLengthMin: 'Duree pause payee (minutes)',
+    saveSettings: 'Enregistrer les parametres',
+    data: 'Donnees',
+    exportJson: 'Exporter JSON',
+    importJson: 'Importer JSON',
+    general: 'General',
+    addNewProject: '+ Ajouter un projet',
+    typeNewProject: 'Saisissez un nouveau nom de projet pour l ajouter.',
+    alreadyExists: '{project} existe deja.',
+    addedProject: 'Projet {project} ajoute.',
+    switchedProject: 'Projet actif: {project}.',
+    renamedProject: '{from} renomme en {to} ({count} enregistrements).',
+    dateStartRequired: 'La date et l heure de debut sont obligatoires.',
+    dateTimeRequired: 'La date, l heure de debut et l heure de fin sont obligatoires.',
+    startInvalid: 'L heure de debut est invalide.',
+    startFuture: 'L heure de debut ne peut pas etre dans le futur.',
+    endAfterStart: 'L heure de fin doit etre apres l heure de debut.',
+    endFuture: 'L heure de fin ne peut pas etre dans le futur.',
+    outside14: 'L entree doit etre dans les 14 derniers jours.',
+    runningAlready:
+      'Un chronometre est deja en cours. Modifiez plutot l entree en cours ci-dessous.',
+    startedRunning: 'Entree en cours demarree pour {project}.',
+    addedEntry: 'Entree {project} ajoutee.',
+    editDateStartRequired: 'Modification impossible: date et heure de debut requises.',
+    editStartInvalid: 'Modification impossible: heure de debut invalide.',
+    editStartFuture: 'Modification impossible: heure de debut dans le futur.',
+    editOutside14: 'Modification impossible: entree hors fenetre des 14 jours.',
+    editEndAfterStart: 'Modification impossible: heure de fin apres debut requise.',
+    editEndFuture: 'Modification impossible: heure de fin dans le futur.',
+    runningSaved: 'Entree en cours enregistree comme entree terminee.',
+    runningUpdated: 'Entree en cours mise a jour.',
+    entryUpdated: 'Entree mise a jour.',
+    entryDeleted: 'Entree supprimee.',
+    noEntries14: 'Aucune entree de travail sur les 14 derniers jours.',
+    runningTag: 'En cours',
+    runningWord: 'En cours',
+    settingsSaved: 'Parametres enregistres.',
+    targetHoursInvalid: 'Heures/semaine doit etre superieur a 0.',
+    breakIntervalInvalid: 'L intervalle de pause doit etre superieur a 0 heure.',
+    targetDaysInvalid: 'Jours/semaine doit etre entre 1 et 7.',
+    trackingDateInvalid: 'Date de debut invalide.',
+    weekStartInvalid: 'Le premier jour de semaine est invalide.',
+    paidBreakInvalid: 'Minutes de pause payee doit etre 0 ou plus.',
+    exportJsonDone: 'Sauvegarde JSON exportee.',
+    exportCsvDone: 'CSV des projets exporte.',
+    importFailed: 'Import echoue: format invalide.',
+    importDone: '{count} nouveaux enregistrements importes.',
+  },
+}
 
 const el = {
   liveTimer: document.getElementById('liveTimer'),
@@ -30,6 +223,18 @@ const el = {
   projectDropdown: document.getElementById('projectDropdown'),
   projectBreakdownList: document.getElementById('projectBreakdownList'),
   projectDataHint: document.getElementById('projectDataHint'),
+  entryDateInput: document.getElementById('entryDateInput'),
+  entryProjectInput: document.getElementById('entryProjectInput'),
+  entryProjectDropdown: document.getElementById('entryProjectDropdown'),
+  entryStartTimeInput: document.getElementById('entryStartTimeInput'),
+  entryEndTimeInput: document.getElementById('entryEndTimeInput'),
+  addEntryBtn: document.getElementById('addEntryBtn'),
+  recentEntriesList: document.getElementById('recentEntriesList'),
+  entryHint: document.getElementById('entryHint'),
+  deleteEntryConfirm: document.getElementById('deleteEntryConfirm'),
+  deleteEntryMessage: document.getElementById('deleteEntryMessage'),
+  cancelDeleteEntryBtn: document.getElementById('cancelDeleteEntryBtn'),
+  confirmDeleteEntryBtn: document.getElementById('confirmDeleteEntryBtn'),
 
   yearAvg: document.getElementById('yearAvg'),
   weekSoFar: document.getElementById('weekSoFar'),
@@ -40,6 +245,7 @@ const el = {
 
   targetHoursInput: document.getElementById('targetHoursInput'),
   targetDaysInput: document.getElementById('targetDaysInput'),
+  weekStartsOnInput: document.getElementById('weekStartsOnInput'),
   startDateInput: document.getElementById('startDateInput'),
   breakIntervalHoursInput: document.getElementById('breakIntervalHoursInput'),
   paidBreakMinutesInput: document.getElementById('paidBreakMinutesInput'),
@@ -56,10 +262,38 @@ const el = {
 init()
 
 function init() {
+  applyTranslations()
   bindEvents()
   hydrateInputs()
   ensureTicker()
   render()
+}
+
+function t(key, vars = {}) {
+  const table = I18N[UI_LANGUAGE] || I18N.en
+  const fallback = I18N.en[key] || key
+  const template = table[key] || fallback
+  return template.replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? ''))
+}
+
+function applyTranslations() {
+  const textNodes = document.querySelectorAll('[data-i18n]')
+  for (const node of textNodes) {
+    const key = node.getAttribute('data-i18n')
+    if (!key) {
+      continue
+    }
+    node.textContent = t(key)
+  }
+
+  const placeholders = document.querySelectorAll('[data-i18n-placeholder]')
+  for (const node of placeholders) {
+    const key = node.getAttribute('data-i18n-placeholder')
+    if (!key || !(node instanceof HTMLInputElement)) {
+      continue
+    }
+    node.placeholder = t(key)
+  }
 }
 
 function bindEvents() {
@@ -94,21 +328,45 @@ function bindEvents() {
     }
   })
 
+  el.entryProjectInput.addEventListener('focus', showEntryProjectDropdown)
+  el.entryProjectInput.addEventListener('input', showEntryProjectDropdown)
+  el.entryProjectInput.addEventListener('blur', onEntryProjectInputBlur)
+  el.entryProjectInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      onEntryProjectChanged()
+    }
+  })
+
   document.addEventListener('click', onDocumentClick)
 
   el.saveSettingsBtn.addEventListener('click', onSaveSettings)
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
   el.importInput.addEventListener('change', onImportJson)
+  el.addEntryBtn.addEventListener('click', onAddEntry)
+  el.recentEntriesList.addEventListener('click', onRecentEntriesListClick)
+  el.cancelDeleteEntryBtn.addEventListener('click', closeDeleteConfirm)
+  el.confirmDeleteEntryBtn.addEventListener('click', confirmDeleteEntry)
+  el.deleteEntryConfirm.addEventListener('click', (event) => {
+    if (event.target === el.deleteEntryConfirm) {
+      closeDeleteConfirm()
+    }
+  })
 }
 
 function hydrateInputs() {
   el.targetHoursInput.value = String(state.settings.targetHoursPerWeek)
   el.targetDaysInput.value = String(state.settings.targetDaysPerWeek)
+  el.weekStartsOnInput.value = String(state.settings.weekStartsOn)
   el.startDateInput.value = state.settings.trackingStartDate || ''
   el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
   el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
   el.projectInput.value = state.activeSession?.project || state.lastProject || 'General'
+  el.entryProjectInput.value = el.projectInput.value
+  const now = new Date()
+  el.entryDateInput.value = formatDateInput(now)
+  el.entryStartTimeInput.value = '09:00'
+  el.entryEndTimeInput.value = '17:00'
   projectInputPrevious = getProjectInput()
 }
 
@@ -123,12 +381,41 @@ function onClockToggle() {
 }
 
 function onProjectChanged() {
-  const nextProject = getProjectInput()
+  const rawProjectName = el.projectInput.value.trim()
+  const nextProject = normalizeProjectName(rawProjectName)
   const knownProjects = new Set(
     collectProjects(state.sessions, state.activeSession, state.paidBreakAwards),
   )
 
+  if (projectAddMode && !rawProjectName) {
+    setHint(el.projectDataHint, t('typeNewProject'))
+    return
+  }
+
   if (!state.activeSession) {
+    if (projectAddMode) {
+      if (knownProjects.has(nextProject)) {
+        projectAddMode = false
+        el.projectInput.value = nextProject
+        projectInputPrevious = nextProject
+        state.lastProject = nextProject
+        el.entryProjectInput.value = nextProject
+        saveState()
+        setHint(el.projectDataHint, t('alreadyExists', { project: nextProject }))
+        renderProjects()
+        return
+      }
+
+      projectAddMode = false
+      state.lastProject = nextProject
+      projectInputPrevious = nextProject
+      el.entryProjectInput.value = nextProject
+      saveState()
+      setHint(el.projectDataHint, t('addedProject', { project: nextProject }))
+      renderProjects()
+      return
+    }
+
     const previousProject = projectInputPrevious
     if (
       previousProject &&
@@ -140,18 +427,20 @@ function onProjectChanged() {
       saveState()
       setHint(
         el.projectDataHint,
-        `Renamed ${previousProject} to ${nextProject} (${renamedCount} records).`,
+        t('renamedProject', { from: previousProject, to: nextProject, count: renamedCount }),
       )
       render()
     }
     projectInputPrevious = nextProject
     state.lastProject = nextProject
+    el.entryProjectInput.value = nextProject
     saveState()
     return
   }
 
   const currentProject = state.activeSession.project
   if (nextProject === currentProject) {
+    projectAddMode = false
     projectInputPrevious = nextProject
     return
   }
@@ -159,8 +448,10 @@ function onProjectChanged() {
   processPaidBreakAwards()
   closeActiveSession({ keepRun: true })
   startSession(nextProject, { keepRun: true })
-  setHint(el.projectDataHint, `Switched project to ${nextProject}.`)
+  setHint(el.projectDataHint, t('switchedProject', { project: nextProject }))
+  projectAddMode = false
   projectInputPrevious = nextProject
+  el.entryProjectInput.value = nextProject
   render()
 }
 
@@ -176,51 +467,103 @@ function onDocumentClick(event) {
   if (target === el.projectInput || el.projectDropdown.contains(target)) {
     return
   }
+  if (target === el.entryProjectInput || el.entryProjectDropdown.contains(target)) {
+    return
+  }
+  if (target instanceof Element) {
+    if (
+      target.closest('[data-field="project"]') ||
+      target.closest('[data-field="project-dropdown"]')
+    ) {
+      return
+    }
+  }
   hideProjectDropdown()
+  hideEntryProjectDropdown()
+  hideAllInlineEntryProjectDropdowns()
+}
+
+function onEntryProjectInputBlur() {
+  setTimeout(() => {
+    onEntryProjectChanged()
+    hideEntryProjectDropdown()
+  }, 120)
+}
+
+function onEntryProjectChanged() {
+  const rawName = el.entryProjectInput.value.trim()
+  const nextProject = normalizeProjectName(rawName)
+  const knownProjects = new Set(
+    collectProjects(state.sessions, state.activeSession, state.paidBreakAwards),
+  )
+
+  if (entryProjectAddMode && !rawName) {
+    setHint(el.entryHint, t('typeNewProject'))
+    return
+  }
+
+  if (entryProjectAddMode && knownProjects.has(nextProject)) {
+    setHint(el.entryHint, t('alreadyExists', { project: nextProject }))
+  } else if (entryProjectAddMode) {
+    setHint(el.entryHint, t('addedProject', { project: nextProject }))
+  }
+
+  entryProjectAddMode = false
+  el.entryProjectInput.value = nextProject
+  state.lastProject = nextProject
+  saveState()
+  renderProjects()
 }
 
 function onSaveSettings() {
   const target = Number(el.targetHoursInput.value)
   const targetDays = Number(el.targetDaysInput.value)
+  const weekStartsOn = Number(el.weekStartsOnInput.value)
   const trackingStartDate = el.startDateInput.value
   const intervalHours = Number(el.breakIntervalHoursInput.value)
   const paidBreak = Number(el.paidBreakMinutesInput.value)
 
   if (!Number.isFinite(target) || target <= 0) {
-    setHint(el.settingsHint, 'Target hours/week must be greater than 0.')
+    setHint(el.settingsHint, t('targetHoursInvalid'))
     return
   }
 
   if (!Number.isFinite(intervalHours) || intervalHours <= 0) {
-    setHint(el.settingsHint, 'Break interval must be greater than 0 hours.')
+    setHint(el.settingsHint, t('breakIntervalInvalid'))
     return
   }
 
   if (!Number.isFinite(targetDays) || targetDays < 1 || targetDays > 7) {
-    setHint(el.settingsHint, 'Target days/week must be between 1 and 7.')
+    setHint(el.settingsHint, t('targetDaysInvalid'))
+    return
+  }
+
+  if (!Number.isFinite(weekStartsOn) || weekStartsOn < 0 || weekStartsOn > 6) {
+    setHint(el.settingsHint, t('weekStartInvalid'))
     return
   }
 
   if (trackingStartDate) {
     const parsedStart = parseDateOnly(trackingStartDate)
     if (!parsedStart) {
-      setHint(el.settingsHint, 'Tracking start date is invalid.')
+      setHint(el.settingsHint, t('trackingDateInvalid'))
       return
     }
   }
 
   if (!Number.isFinite(paidBreak) || paidBreak < 0) {
-    setHint(el.settingsHint, 'Paid break minutes must be 0 or greater.')
+    setHint(el.settingsHint, t('paidBreakInvalid'))
     return
   }
 
   state.settings.targetHoursPerWeek = target
   state.settings.targetDaysPerWeek = Math.round(targetDays)
+  state.settings.weekStartsOn = Math.round(weekStartsOn)
   state.settings.trackingStartDate = trackingStartDate || ''
   state.settings.paidBreakIntervalHours = intervalHours
   state.settings.paidBreakMinutes = paidBreak
   saveState()
-  setHint(el.settingsHint, 'Settings saved.')
+  setHint(el.settingsHint, t('settingsSaved'))
   render()
 }
 
@@ -234,7 +577,7 @@ function onExportJson() {
   a.download = `time-tracker-backup-${stamp}.json`
   a.click()
   URL.revokeObjectURL(url)
-  setHint(el.jsonHint, 'Exported JSON backup.')
+  setHint(el.jsonHint, t('exportJsonDone'))
 }
 
 function onExportProjectCsv() {
@@ -253,7 +596,7 @@ function onExportProjectCsv() {
   a.download = `time-tracker-project-breakdown-${stamp}.csv`
   a.click()
   URL.revokeObjectURL(url)
-  setHint(el.projectDataHint, 'Exported project breakdown CSV.')
+  setHint(el.projectDataHint, t('exportCsvDone'))
 }
 
 async function onImportJson(event) {
@@ -270,7 +613,6 @@ async function onImportJson(event) {
     state.settings = {
       ...state.settings,
       ...imported.settings,
-      weekStartsOn: 1,
     }
 
     const mergedSessions = mergeById(state.sessions, imported.sessions)
@@ -278,12 +620,442 @@ async function onImportJson(event) {
     saveState()
     hydrateInputs()
     render()
-    setHint(el.jsonHint, `Imported ${mergedSessions + mergedAwards} new records.`)
+    setHint(el.jsonHint, t('importDone', { count: mergedSessions + mergedAwards }))
   } catch {
-    setHint(el.jsonHint, 'Import failed: invalid file format.')
+    setHint(el.jsonHint, t('importFailed'))
   } finally {
     event.target.value = ''
   }
+}
+
+function onAddEntry() {
+  const dateText = el.entryDateInput.value
+  const startText = el.entryStartTimeInput.value
+  const endText = el.entryEndTimeInput.value.trim()
+  const project = normalizeProjectName(el.entryProjectInput.value)
+
+  if (!dateText || !startText) {
+    setHint(el.entryHint, t('dateStartRequired'))
+    return
+  }
+
+  const startMs = parseDateTimeInput(dateText, startText)
+  if (!Number.isFinite(startMs)) {
+    setHint(el.entryHint, t('startInvalid'))
+    return
+  }
+
+  if (startMs > Date.now()) {
+    setHint(el.entryHint, t('startFuture'))
+    return
+  }
+
+  const windowStart = getRecentWindowStart(new Date()).getTime()
+  if (startMs < windowStart) {
+    setHint(el.entryHint, t('outside14'))
+    return
+  }
+
+  if (!endText) {
+    if (state.activeSession) {
+      setHint(el.entryHint, t('runningAlready'))
+      return
+    }
+
+    startManualActiveSession(startMs, project)
+    setHint(el.entryHint, t('startedRunning', { project }))
+    render()
+    return
+  }
+
+  const endMs = parseDateTimeInput(dateText, endText)
+  if (!Number.isFinite(endMs) || endMs <= startMs) {
+    setHint(el.entryHint, t('endAfterStart'))
+    return
+  }
+
+  if (endMs > Date.now()) {
+    setHint(el.entryHint, t('endFuture'))
+    return
+  }
+
+  state.sessions.push(createClosedSession(startMs, endMs, project))
+  addPaidBreakAwardsForRange(startMs, endMs, project)
+  state.lastProject = project
+  el.projectInput.value = project
+  el.entryProjectInput.value = project
+  projectInputPrevious = project
+  openEntryEditorId = null
+  saveState()
+  setHint(el.entryHint, t('addedEntry', { project }))
+  render()
+}
+
+function onRecentEntriesListClick(event) {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+
+  const action = target.dataset.action
+  const id = target.dataset.id
+  if (!action || !id) {
+    return
+  }
+
+  if (action === 'edit') {
+    openEntryEditorId = openEntryEditorId === id ? null : id
+    renderRecentEntries(new Date())
+  } else if (action === 'pick-inline-project') {
+    const value = target.dataset.value || ''
+    selectInlineEntryProject(id, value)
+  } else if (action === 'cancel-edit') {
+    openEntryEditorId = null
+    renderRecentEntries(new Date())
+  } else if (action === 'save-edit') {
+    saveEditedEntry(id)
+  } else if (action === 'delete') {
+    openDeleteConfirm(id)
+  }
+}
+
+function saveEditedEntry(id) {
+  const row = el.recentEntriesList.querySelector(`[data-entry-id="${id}"]`)
+  if (!row) {
+    return
+  }
+
+  const dateInput = row.querySelector('[data-field="date"]')
+  const projectInput = row.querySelector('[data-field="project"]')
+  const startInput = row.querySelector('[data-field="start"]')
+  const endInput = row.querySelector('[data-field="end"]')
+
+  if (!dateInput || !projectInput || !startInput || !endInput) {
+    return
+  }
+
+  const dateText = dateInput.value
+  const startText = startInput.value
+  const endText = endInput.value.trim()
+  const rawProject = projectInput.value.trim()
+  const project = normalizeProjectName(rawProject)
+  if (projectInput.dataset.addMode === 'true' && !rawProject) {
+    setHint(el.entryHint, t('typeNewProject'))
+    return
+  }
+
+  if (!dateText || !startText) {
+    setHint(el.entryHint, t('editDateStartRequired'))
+    return
+  }
+
+  const nextStart = parseDateTimeInput(dateText, startText)
+  if (!Number.isFinite(nextStart)) {
+    setHint(el.entryHint, t('editStartInvalid'))
+    return
+  }
+
+  if (nextStart > Date.now()) {
+    setHint(el.entryHint, t('editStartFuture'))
+    return
+  }
+
+  const windowStart = getRecentWindowStart(new Date()).getTime()
+  if (nextStart < windowStart) {
+    setHint(el.entryHint, t('editOutside14'))
+    return
+  }
+
+  if (id === getRunningEntryId()) {
+    if (endText) {
+      const nextEnd = parseDateTimeInput(dateText, endText)
+      if (!Number.isFinite(nextEnd) || nextEnd <= nextStart) {
+        setHint(el.entryHint, t('editEndAfterStart'))
+        return
+      }
+      if (nextEnd > Date.now()) {
+        setHint(el.entryHint, t('editEndFuture'))
+        return
+      }
+      stopManualActiveSession(nextStart, nextEnd, project)
+      setHint(el.entryHint, t('runningSaved'))
+    } else {
+      updateActiveSessionStart(nextStart, project)
+      setHint(el.entryHint, t('runningUpdated'))
+    }
+  } else {
+    const nextEnd = parseDateTimeInput(dateText, endText)
+    if (!Number.isFinite(nextEnd) || nextEnd <= nextStart) {
+      setHint(el.entryHint, t('editEndAfterStart'))
+      return
+    }
+    if (nextEnd > Date.now()) {
+      setHint(el.entryHint, t('editEndFuture'))
+      return
+    }
+    updateClosedSession(id, nextStart, nextEnd, project)
+    setHint(el.entryHint, t('entryUpdated'))
+  }
+
+  openEntryEditorId = null
+  saveState()
+  render()
+}
+
+function openDeleteConfirm(id) {
+  const entry = getEntryById(id)
+  if (!entry) {
+    return
+  }
+  pendingDeleteEntryId = id
+  el.deleteEntryMessage.textContent = `${entry.project} • ${formatEntryRange(
+    entry.start,
+    entry.end,
+    entry.isRunning,
+  )}`
+  el.deleteEntryConfirm.classList.add('open')
+  el.deleteEntryConfirm.setAttribute('aria-hidden', 'false')
+}
+
+function closeDeleteConfirm() {
+  pendingDeleteEntryId = null
+  el.deleteEntryConfirm.classList.remove('open')
+  el.deleteEntryConfirm.setAttribute('aria-hidden', 'true')
+}
+
+function confirmDeleteEntry() {
+  if (!pendingDeleteEntryId) {
+    closeDeleteConfirm()
+    return
+  }
+
+  if (pendingDeleteEntryId === getRunningEntryId()) {
+    clearActiveRunAwards()
+    state.activeSession = null
+    state.activeRunStart = null
+    state.activeBreaksGranted = 0
+    ensureTicker()
+  } else {
+    state.sessions = state.sessions.filter((item) => item.id !== pendingDeleteEntryId)
+  }
+
+  openEntryEditorId = null
+  saveState()
+  closeDeleteConfirm()
+  setHint(el.entryHint, t('entryDeleted'))
+  render()
+}
+
+function renderRecentEntries(now) {
+  const rows = getRecentEntries(now)
+
+  el.recentEntriesList.innerHTML = ''
+
+  if (!rows.length) {
+    const empty = document.createElement('p')
+    empty.className = 'hint'
+    empty.textContent = t('noEntries14')
+    el.recentEntriesList.appendChild(empty)
+    return
+  }
+
+  for (const row of rows) {
+    const card = document.createElement('article')
+    card.className = 'recent-entry-row'
+    card.dataset.entryId = row.id
+    const isOpen = openEntryEditorId === row.id
+
+    const runningTag = row.isRunning
+      ? `<span class="recent-entry-running">${escapeHtml(t('runningTag'))}</span>`
+      : ''
+    const endValue = row.isRunning ? '' : formatTimeInput(new Date(row.end))
+
+    card.innerHTML = `
+      <div class="recent-entry-main">
+        <div class="recent-entry-project">${escapeHtml(row.project)} ${runningTag}</div>
+        <div class="recent-entry-time">${escapeHtml(
+          formatEntryRange(row.start, row.end, row.isRunning),
+        )}</div>
+      </div>
+      <div class="recent-entry-actions">
+        <button class="btn" type="button" data-action="${
+          isOpen ? 'save-edit' : 'edit'
+        }" data-id="${escapeHtml(row.id)}">${isOpen ? t('save') : t('edit')}</button>
+        <button class="btn ${isOpen ? '' : 'btn-danger'}" type="button" data-action="${
+      isOpen ? 'cancel-edit' : 'delete'
+    }" data-id="${escapeHtml(row.id)}">${isOpen ? t('cancel') : t('delete')}</button>
+      </div>
+      <div class="entry-edit-panel ${isOpen ? 'open' : ''}">
+        <div class="entry-edit-grid">
+          <label class="field">
+            <span>${escapeHtml(t('date'))}</span>
+            <input data-field="date" type="date" value="${formatDateInput(new Date(row.start))}" />
+          </label>
+          <label class="field">
+            <span>${escapeHtml(t('project'))}</span>
+            <div class="project-input-wrap">
+              <input data-field="project" type="text" maxlength="80" value="${escapeHtml(
+                row.project,
+              )}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <div class="project-dropdown" data-field="project-dropdown" role="listbox"></div>
+            </div>
+          </label>
+          <label class="field">
+            <span>${escapeHtml(t('startTime'))}</span>
+            <input data-field="start" type="time" step="60" value="${formatTimeInput(
+              new Date(row.start),
+            )}" />
+          </label>
+          <label class="field">
+            <span>${escapeHtml(row.isRunning ? t('endTimeOptional') : t('endTime'))}</span>
+            <input data-field="end" type="time" step="60" value="${endValue}" />
+          </label>
+        </div>
+      </div>
+    `
+    el.recentEntriesList.appendChild(card)
+
+    if (isOpen) {
+      renderInlineEntryProjectOptions(card, row.id)
+      bindInlineEntryProjectInput(card, row.id)
+    }
+  }
+}
+
+function bindInlineEntryProjectInput(card, rowId) {
+  const input = card.querySelector('[data-field="project"]')
+  if (!input) {
+    return
+  }
+
+  input.addEventListener('focus', () => showInlineEntryProjectDropdown(rowId))
+  input.addEventListener('input', () => showInlineEntryProjectDropdown(rowId))
+  input.addEventListener('blur', () => {
+    setTimeout(() => hideInlineEntryProjectDropdown(rowId), 120)
+  })
+}
+
+function renderInlineEntryProjectOptions(card, rowId) {
+  const dropdown = card.querySelector('[data-field="project-dropdown"]')
+  if (!dropdown) {
+    return
+  }
+
+  const projects = getProjectsByLastUse(state.sessions, state.activeSession, state.paidBreakAwards)
+  dropdown.innerHTML = ''
+
+  const addOption = document.createElement('button')
+  addOption.type = 'button'
+  addOption.className = 'project-option project-option-addnew'
+  addOption.textContent = t('addNewProject')
+  addOption.dataset.action = 'pick-inline-project'
+  addOption.dataset.id = rowId
+  addOption.dataset.value = PROJECT_ADD_NEW_TOKEN
+  dropdown.appendChild(addOption)
+
+  for (const project of projects) {
+    const option = document.createElement('button')
+    option.type = 'button'
+    option.className = 'project-option'
+    option.textContent = project
+    option.dataset.action = 'pick-inline-project'
+    option.dataset.id = rowId
+    option.dataset.value = project
+    dropdown.appendChild(option)
+  }
+}
+
+function showInlineEntryProjectDropdown(rowId) {
+  const row = el.recentEntriesList.querySelector(`[data-entry-id="${rowId}"]`)
+  if (!row) {
+    return
+  }
+  const dropdown = row.querySelector('[data-field="project-dropdown"]')
+  if (!dropdown) {
+    return
+  }
+  dropdown.classList.add('open')
+}
+
+function hideInlineEntryProjectDropdown(rowId) {
+  const row = el.recentEntriesList.querySelector(`[data-entry-id="${rowId}"]`)
+  if (!row) {
+    return
+  }
+  const dropdown = row.querySelector('[data-field="project-dropdown"]')
+  if (!dropdown) {
+    return
+  }
+  dropdown.classList.remove('open')
+}
+
+function selectInlineEntryProject(rowId, value) {
+  const row = el.recentEntriesList.querySelector(`[data-entry-id="${rowId}"]`)
+  if (!row) {
+    return
+  }
+
+  const input = row.querySelector('[data-field="project"]')
+  if (!input) {
+    return
+  }
+
+  if (value === PROJECT_ADD_NEW_TOKEN) {
+    input.dataset.addMode = 'true'
+    input.value = ''
+    setHint(el.entryHint, t('typeNewProject'))
+    showInlineEntryProjectDropdown(rowId)
+    input.focus()
+    return
+  }
+
+  input.dataset.addMode = 'false'
+  input.value = value
+  hideInlineEntryProjectDropdown(rowId)
+}
+
+function getRecentEntries(now) {
+  const startMs = getRecentWindowStart(now).getTime()
+  const rows = state.sessions
+    .filter((session) => session.start >= startMs)
+    .map((session) => ({ ...session, isRunning: false }))
+
+  if (state.activeSession && state.activeSession.start >= startMs) {
+    rows.push({
+      id: getRunningEntryId(),
+      start: state.activeSession.start,
+      end: Date.now(),
+      project: state.activeSession.project,
+      isRunning: true,
+    })
+  }
+
+  return rows.sort((a, b) => b.start - a.start)
+}
+
+function getRunningEntryId() {
+  return '__running__'
+}
+
+function getEntryById(id) {
+  if (id === getRunningEntryId()) {
+    if (!state.activeSession) {
+      return null
+    }
+    return {
+      id,
+      start: state.activeSession.start,
+      end: Date.now(),
+      project: state.activeSession.project,
+      isRunning: true,
+    }
+  }
+
+  const session = state.sessions.find((item) => item.id === id)
+  if (!session) {
+    return null
+  }
+  return { ...session, isRunning: false }
 }
 
 function setOverlayOpen(node, isOpen) {
@@ -294,6 +1066,7 @@ function setOverlayOpen(node, isOpen) {
 function startSession(project, options = {}) {
   const now = Date.now()
   const keepRun = Boolean(options.keepRun)
+  const nextProject = normalizeProjectName(project)
 
   if (!keepRun || !state.activeRunStart) {
     state.activeRunStart = now
@@ -303,10 +1076,11 @@ function startSession(project, options = {}) {
   state.activeSession = {
     id: createId(),
     start: now,
-    project,
+    project: nextProject,
   }
 
-  state.lastProject = project
+  state.lastProject = nextProject
+  el.entryProjectInput.value = nextProject
 
   saveState()
   ensureTicker()
@@ -336,6 +1110,102 @@ function closeActiveSession(options = {}) {
 
   saveState()
   ensureTicker()
+}
+
+function createClosedSession(startMs, endMs, project) {
+  return {
+    id: createId(),
+    start: startMs,
+    end: endMs,
+    project,
+    durationMs: Math.max(0, endMs - startMs),
+  }
+}
+
+function addPaidBreakAwardsForRange(startMs, endMs, project) {
+  const intervalMs = state.settings.paidBreakIntervalHours * 60 * 60 * 1000
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+    return
+  }
+
+  const awardDurationMs = state.settings.paidBreakMinutes * 60 * 1000
+  const count = Math.floor(Math.max(0, endMs - startMs) / intervalMs)
+  for (let i = 1; i <= count; i += 1) {
+    state.paidBreakAwards.push({
+      id: createId(),
+      at: startMs + i * intervalMs,
+      project,
+      durationMs: awardDurationMs,
+    })
+  }
+}
+
+function startManualActiveSession(startMs, project) {
+  state.activeSession = {
+    id: createId(),
+    start: startMs,
+    project,
+  }
+  state.activeRunStart = startMs
+  state.activeBreaksGranted = 0
+  state.lastProject = project
+  processPaidBreakAwards()
+  saveState()
+  ensureTicker()
+}
+
+function stopManualActiveSession(startMs, endMs, project) {
+  clearActiveRunAwards()
+  state.sessions.push(createClosedSession(startMs, endMs, project))
+  addPaidBreakAwardsForRange(startMs, endMs, project)
+  state.activeSession = null
+  state.activeRunStart = null
+  state.activeBreaksGranted = 0
+  state.lastProject = project
+  ensureTicker()
+}
+
+function updateActiveSessionStart(startMs, project) {
+  if (!state.activeSession) {
+    return
+  }
+
+  clearActiveRunAwards()
+  state.activeSession.start = startMs
+  state.activeSession.project = project
+  state.activeRunStart = startMs
+  state.activeBreaksGranted = 0
+  state.lastProject = project
+  processPaidBreakAwards()
+  ensureTicker()
+}
+
+function clearActiveRunAwards() {
+  if (!state.activeRunStart || !state.activeSession) {
+    return
+  }
+
+  const runStart = state.activeRunStart
+  const runProject = state.activeSession.project
+  state.paidBreakAwards = state.paidBreakAwards.filter((award) => {
+    if (award.project !== runProject) {
+      return true
+    }
+    return award.at < runStart
+  })
+}
+
+function updateClosedSession(id, startMs, endMs, project) {
+  const session = state.sessions.find((item) => item.id === id)
+  if (!session) {
+    return
+  }
+
+  session.start = startMs
+  session.end = endMs
+  session.project = project
+  session.durationMs = Math.max(0, endMs - startMs)
+  state.lastProject = project
 }
 
 function processPaidBreakAwards() {
@@ -387,14 +1257,31 @@ function render() {
   renderLiveTimer()
   renderStats()
   renderProjectBreakdown(new Date())
+  renderRecentEntries(new Date())
 
   const running = Boolean(state.activeSession)
-  el.startStopBtn.textContent = running ? 'Clock Out' : 'Clock In'
+  el.startStopBtn.textContent = running ? t('clockOut') : t('clockIn')
 }
 
 function renderProjects() {
   const projects = getProjectsByLastUse(state.sessions, state.activeSession, state.paidBreakAwards)
-  el.projectDropdown.innerHTML = ''
+  renderProjectOptionsList(el.projectDropdown, projects, selectProjectFromDropdown)
+  renderProjectOptionsList(el.entryProjectDropdown, projects, selectEntryProjectFromDropdown)
+}
+
+function renderProjectOptionsList(dropdownNode, projects, onSelect) {
+  dropdownNode.innerHTML = ''
+
+  const addOption = document.createElement('button')
+  addOption.type = 'button'
+  addOption.className = 'project-option project-option-addnew'
+  addOption.textContent = t('addNewProject')
+  addOption.setAttribute('role', 'option')
+  addOption.addEventListener('mousedown', (event) => {
+    event.preventDefault()
+    onSelect(PROJECT_ADD_NEW_TOKEN)
+  })
+  dropdownNode.appendChild(addOption)
 
   for (const project of projects) {
     const option = document.createElement('button')
@@ -404,13 +1291,24 @@ function renderProjects() {
     option.setAttribute('role', 'option')
     option.addEventListener('mousedown', (event) => {
       event.preventDefault()
-      selectProjectFromDropdown(project)
+      onSelect(project)
     })
-    el.projectDropdown.appendChild(option)
+    dropdownNode.appendChild(option)
   }
 }
 
 function selectProjectFromDropdown(project) {
+  if (project === PROJECT_ADD_NEW_TOKEN) {
+    projectAddMode = true
+    el.projectInput.value = ''
+    projectInputPrevious = ''
+    setHint(el.projectDataHint, t('typeNewProject'))
+    showProjectDropdown()
+    el.projectInput.focus()
+    return
+  }
+
+  projectAddMode = false
   el.projectInput.value = project
   onProjectChanged()
   hideProjectDropdown()
@@ -427,6 +1325,40 @@ function hideProjectDropdown() {
   el.projectDropdown.classList.remove('open')
 }
 
+function selectEntryProjectFromDropdown(project) {
+  if (project === PROJECT_ADD_NEW_TOKEN) {
+    entryProjectAddMode = true
+    el.entryProjectInput.value = ''
+    setHint(el.entryHint, t('typeNewProject'))
+    showEntryProjectDropdown()
+    el.entryProjectInput.focus()
+    return
+  }
+
+  entryProjectAddMode = false
+  el.entryProjectInput.value = project
+  onEntryProjectChanged()
+  hideEntryProjectDropdown()
+}
+
+function showEntryProjectDropdown() {
+  if (!el.entryProjectDropdown.children.length) {
+    return
+  }
+  el.entryProjectDropdown.classList.add('open')
+}
+
+function hideEntryProjectDropdown() {
+  el.entryProjectDropdown.classList.remove('open')
+}
+
+function hideAllInlineEntryProjectDropdowns() {
+  const dropdowns = el.recentEntriesList.querySelectorAll('[data-field="project-dropdown"]')
+  for (const dropdown of dropdowns) {
+    dropdown.classList.remove('open')
+  }
+}
+
 function renderLiveTimer() {
   if (!state.activeSession || !state.activeRunStart) {
     el.liveTimer.textContent = '00:00:00'
@@ -439,22 +1371,31 @@ function renderLiveTimer() {
 
 function renderStats() {
   const now = new Date()
+  const currentWeekStart = startOfWeek(now, state.settings.weekStartsOn)
   const day = computeRangeTotalMs(startOfDay(now), now)
-  const week = computeRangeTotalMs(startOfWeek(now, state.settings.weekStartsOn), now)
+  const week = computeRangeTotalMs(currentWeekStart, now)
 
   const trackingStart = resolveTrackingStart(now)
-  const totalSinceStart = computeRangeTotalMs(trackingStart, now)
-  const activeWeeks = countActiveWeeks(trackingStart, now, state.settings.weekStartsOn)
+  const completedWindowEnd = currentWeekStart
+  const hasCompletedWindow = completedWindowEnd.getTime() > trackingStart.getTime()
+  const totalSinceStart = hasCompletedWindow
+    ? computeRangeTotalMs(trackingStart, completedWindowEnd)
+    : 0
+  const activeWeeks = hasCompletedWindow
+    ? countActiveWeeks(trackingStart, completedWindowEnd, state.settings.weekStartsOn)
+    : 0
   const avgYearWeek = activeWeeks > 0 ? totalSinceStart / activeWeeks : 0
   const weekTargetMs = state.settings.targetHoursPerWeek * 60 * 60 * 1000
   const weekDeltaMs = week - weekTargetMs
 
-  const elapsedTargetDays = computeElapsedTargetDays(
-    trackingStart,
-    now,
-    state.settings.targetDaysPerWeek,
-    state.settings.weekStartsOn,
-  )
+  const elapsedTargetDays = hasCompletedWindow
+    ? computeElapsedTargetDays(
+        trackingStart,
+        completedWindowEnd,
+        state.settings.targetDaysPerWeek,
+        state.settings.weekStartsOn,
+      )
+    : 0
   const targetSinceStartMs = elapsedTargetDays * (weekTargetMs / state.settings.targetDaysPerWeek)
   const yearDeltaMs = totalSinceStart - targetSinceStartMs
 
@@ -591,8 +1532,7 @@ function countActiveWeeks(startDate, endDate, weekStartsOn) {
 }
 
 function getProjectInput() {
-  const value = el.projectInput.value.trim()
-  return value || 'General'
+  return normalizeProjectName(el.projectInput.value)
 }
 
 function setHint(node, text) {
@@ -694,6 +1634,61 @@ function parseDateOnly(value) {
   return parsed
 }
 
+function parseDateTimeInput(dateText, timeText) {
+  const date = parseDateOnly(dateText)
+  if (!date) {
+    return NaN
+  }
+
+  const match = /^(\d{2}):(\d{2})$/.exec(timeText || '')
+  if (!match) {
+    return NaN
+  }
+
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return NaN
+  }
+
+  const result = new Date(date)
+  result.setHours(hours, minutes, 0, 0)
+  return result.getTime()
+}
+
+function formatDateInput(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function formatTimeInput(date) {
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function formatEntryRange(startMs, endMs, isRunning = false) {
+  const start = new Date(startMs)
+  if (isRunning) {
+    return `${formatDateInput(start)} ${formatTimeInput(start)}-${t(
+      'runningWord',
+    )} (${formatDuration(Date.now() - startMs)})`
+  }
+
+  const end = new Date(endMs)
+  return `${formatDateInput(start)} ${formatTimeInput(start)}-${formatTimeInput(
+    end,
+  )} (${formatDuration(endMs - startMs)})`
+}
+
+function getRecentWindowStart(now) {
+  const start = startOfDay(now)
+  start.setDate(start.getDate() - 13)
+  return start
+}
+
+function normalizeProjectName(value) {
+  const name = String(value || '').trim()
+  return name || 'General'
+}
+
 function formatClock(ms) {
   const totalSeconds = Math.floor(ms / 1000)
   const hours = Math.floor(totalSeconds / 3600)
@@ -756,6 +1751,9 @@ function collectProjects(sessions, activeSession, awards = []) {
 
 function getProjectsByLastUse(sessions, activeSession, awards = []) {
   const latestByProject = new Map([['General', 0]])
+  if (state.lastProject) {
+    latestByProject.set(state.lastProject, Date.now() - 1)
+  }
 
   for (const session of sessions) {
     if (!session.project) {
@@ -874,10 +1872,12 @@ function normalizeImportedState(input) {
     targetDaysPerWeek: Number.isFinite(Number(input?.settings?.targetDaysPerWeek))
       ? Math.max(1, Math.min(7, Math.round(Number(input.settings.targetDaysPerWeek))))
       : DEFAULT_SETTINGS.targetDaysPerWeek,
+    weekStartsOn: Number.isFinite(Number(input?.settings?.weekStartsOn))
+      ? Math.max(0, Math.min(6, Math.round(Number(input.settings.weekStartsOn))))
+      : DEFAULT_SETTINGS.weekStartsOn,
     paidBreakIntervalHours: Number.isFinite(Number(input?.settings?.paidBreakIntervalHours))
       ? Number(input.settings.paidBreakIntervalHours)
       : inferredHours || DEFAULT_SETTINGS.paidBreakIntervalHours,
-    weekStartsOn: 1,
   }
 
   const sessions = Array.isArray(input.sessions)
