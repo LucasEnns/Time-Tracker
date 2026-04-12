@@ -225,18 +225,72 @@
 
         <section class="menu-section">
           <h3 data-i18n="data">Data</h3>
+          <div class="settings-grid">
+            <label class="field">
+              <span data-i18n="googleClientId">Google OAuth Client ID</span>
+              <input
+                id="googleClientIdInput"
+                type="text"
+                placeholder="xxxxxxxx.apps.googleusercontent.com" />
+            </label>
+          </div>
+          <div class="setup-help">
+            <p class="setup-help-title" data-i18n="googleSetupHelp">Google Setup Help</p>
+            <div class="setup-help-links">
+              <a
+                href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                target="_blank"
+                rel="noreferrer"
+                data-i18n="openDriveApiPage"
+                >Open Drive API Page</a
+              >
+              <a
+                href="https://console.cloud.google.com/auth/overview"
+                target="_blank"
+                rel="noreferrer"
+                data-i18n="openConsentPage"
+                >Open OAuth Consent Screen</a
+              >
+              <a
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noreferrer"
+                data-i18n="openCredentialsPage"
+                >Open OAuth Credentials</a
+              >
+            </div>
+            <p class="setup-help-origins-label" data-i18n="authorizedOrigins">
+              Authorized JavaScript Origins
+            </p>
+            <pre id="originsText" class="setup-help-origins"></pre>
+            <button id="copyOriginsBtn" class="btn" type="button" data-i18n="copyOrigins">
+              Copy Origins
+            </button>
+            <p id="setupHelpHint" class="hint"></p>
+          </div>
           <div class="actions-grid">
             <button id="exportBtn" class="btn" type="button" data-i18n="exportJson">
               Export JSON
             </button>
             <label class="btn file-btn" for="importInput" data-i18n="importJson">Import JSON</label>
             <input id="importInput" type="file" accept="application/json" hidden />
+            <button id="connectGoogleBtn" class="btn" type="button" data-i18n="connectGoogleDrive">
+              Connect Google Drive
+            </button>
+            <button id="pullGoogleBtn" class="btn" type="button" data-i18n="pullFromGoogleDrive">
+              Pull From Google Drive
+            </button>
+            <button id="pushGoogleBtn" class="btn" type="button" data-i18n="pushToGoogleDrive">
+              Push To Google Drive
+            </button>
           </div>
+          <p id="googleHint" class="hint"></p>
           <p id="jsonHint" class="hint"></p>
         </section>
       </section>
     </aside>
 
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="app.js"></script>
   </body>
 </html>

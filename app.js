@@ -8,6 +8,8 @@ const DEFAULT_SETTINGS = {
   paidBreakIntervalHours: 3.75,
   paidBreakMinutes: 15,
   weekStartsOn: 1,
+  googleClientId: '',
+  googleDriveFileId: '',
 }
 
 let state = loadState()
@@ -17,8 +19,13 @@ let projectAddMode = false
 let entryProjectAddMode = false
 let openEntryEditorId = null
 let pendingDeleteEntryId = null
+let googleTokenClient = null
+let googleAccessToken = ''
+let googleTokenExpiresAt = 0
 
 const PROJECT_ADD_NEW_TOKEN = '__add_new__'
+const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
+const GOOGLE_SYNC_FILENAME = 'time-tracker-sync.json'
 const UI_LANGUAGE = String(navigator.language || 'en')
   .toLowerCase()
   .startsWith('fr')
@@ -73,6 +80,25 @@ const I18N = {
     data: 'Data',
     exportJson: 'Export JSON',
     importJson: 'Import JSON',
+    googleClientId: 'Google OAuth Client ID',
+    connectGoogleDrive: 'Connect Google Drive',
+    pullFromGoogleDrive: 'Pull From Google Drive',
+    pushToGoogleDrive: 'Push To Google Drive',
+    googleClientIdRequired: 'Google OAuth Client ID is required for Drive sync.',
+    googleApiUnavailable: 'Google API is not available yet. Please retry in a moment.',
+    googleConnected: 'Google Drive connected.',
+    googleNoBackup: 'No Google Drive backup file found yet.',
+    googlePullDone: 'Pulled and merged {count} records from Google Drive.',
+    googlePushDone: 'Pushed current data to Google Drive.',
+    googleSyncFailed: 'Google Drive sync failed: {reason}',
+    googleSetupHelp: 'Google Setup Help',
+    openDriveApiPage: 'Open Drive API Page',
+    openConsentPage: 'Open OAuth Consent Screen',
+    openCredentialsPage: 'Open OAuth Credentials',
+    authorizedOrigins: 'Authorized JavaScript Origins',
+    copyOrigins: 'Copy Origins',
+    originsCopied: 'Origins copied to clipboard.',
+    originsCopyFailed: 'Could not copy origins automatically. Please copy manually.',
     general: 'General',
     addNewProject: '+ Add New Project',
     typeNewProject: 'Type a new project name to add it.',
@@ -162,6 +188,25 @@ const I18N = {
     data: 'Donnees',
     exportJson: 'Exporter JSON',
     importJson: 'Importer JSON',
+    googleClientId: 'ID client OAuth Google',
+    connectGoogleDrive: 'Connecter Google Drive',
+    pullFromGoogleDrive: 'Recuperer depuis Google Drive',
+    pushToGoogleDrive: 'Envoyer vers Google Drive',
+    googleClientIdRequired: 'L ID client OAuth Google est requis pour la synchronisation Drive.',
+    googleApiUnavailable: 'API Google indisponible pour l instant. Reessayez dans un moment.',
+    googleConnected: 'Google Drive connecte.',
+    googleNoBackup: 'Aucune sauvegarde Google Drive trouvee pour le moment.',
+    googlePullDone: '{count} enregistrements recuperes et fusionnes depuis Google Drive.',
+    googlePushDone: 'Donnees actuelles envoyees vers Google Drive.',
+    googleSyncFailed: 'Echec de synchronisation Google Drive: {reason}',
+    googleSetupHelp: 'Aide configuration Google',
+    openDriveApiPage: 'Ouvrir la page API Drive',
+    openConsentPage: 'Ouvrir l ecran de consentement OAuth',
+    openCredentialsPage: 'Ouvrir les identifiants OAuth',
+    authorizedOrigins: 'Origines JavaScript autorisees',
+    copyOrigins: 'Copier les origines',
+    originsCopied: 'Origines copiees dans le presse-papiers.',
+    originsCopyFailed: 'Copie automatique impossible. Copiez manuellement.',
     general: 'General',
     addNewProject: '+ Ajouter un projet',
     typeNewProject: 'Saisissez un nouveau nom de projet pour l ajouter.',
@@ -255,6 +300,14 @@ const el = {
   exportBtn: document.getElementById('exportBtn'),
   importInput: document.getElementById('importInput'),
   jsonHint: document.getElementById('jsonHint'),
+  googleClientIdInput: document.getElementById('googleClientIdInput'),
+  originsText: document.getElementById('originsText'),
+  copyOriginsBtn: document.getElementById('copyOriginsBtn'),
+  setupHelpHint: document.getElementById('setupHelpHint'),
+  connectGoogleBtn: document.getElementById('connectGoogleBtn'),
+  pullGoogleBtn: document.getElementById('pullGoogleBtn'),
+  pushGoogleBtn: document.getElementById('pushGoogleBtn'),
+  googleHint: document.getElementById('googleHint'),
 
   exportProjectCsvBtn: document.getElementById('exportProjectCsvBtn'),
 }
@@ -263,6 +316,7 @@ init()
 
 function init() {
   applyTranslations()
+  renderGoogleSetupOrigins()
   bindEvents()
   hydrateInputs()
   ensureTicker()
@@ -343,6 +397,10 @@ function bindEvents() {
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
   el.importInput.addEventListener('change', onImportJson)
+  el.connectGoogleBtn.addEventListener('click', onConnectGoogleDrive)
+  el.pullGoogleBtn.addEventListener('click', onPullFromGoogleDrive)
+  el.pushGoogleBtn.addEventListener('click', onPushToGoogleDrive)
+  el.copyOriginsBtn.addEventListener('click', onCopyOrigins)
   el.addEntryBtn.addEventListener('click', onAddEntry)
   el.recentEntriesList.addEventListener('click', onRecentEntriesListClick)
   el.cancelDeleteEntryBtn.addEventListener('click', closeDeleteConfirm)
@@ -359,6 +417,7 @@ function hydrateInputs() {
   el.targetDaysInput.value = String(state.settings.targetDaysPerWeek)
   el.weekStartsOnInput.value = String(state.settings.weekStartsOn)
   el.startDateInput.value = state.settings.trackingStartDate || ''
+  el.googleClientIdInput.value = state.settings.googleClientId || ''
   el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
   el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
   el.projectInput.value = state.activeSession?.project || state.lastProject || 'General'
@@ -520,6 +579,7 @@ function onSaveSettings() {
   const targetDays = Number(el.targetDaysInput.value)
   const weekStartsOn = Number(el.weekStartsOnInput.value)
   const trackingStartDate = el.startDateInput.value
+  const googleClientId = el.googleClientIdInput.value.trim()
   const intervalHours = Number(el.breakIntervalHoursInput.value)
   const paidBreak = Number(el.paidBreakMinutesInput.value)
 
@@ -556,12 +616,22 @@ function onSaveSettings() {
     return
   }
 
+  const previousGoogleClientId = state.settings.googleClientId || ''
+
   state.settings.targetHoursPerWeek = target
   state.settings.targetDaysPerWeek = Math.round(targetDays)
   state.settings.weekStartsOn = Math.round(weekStartsOn)
   state.settings.trackingStartDate = trackingStartDate || ''
+  state.settings.googleClientId = googleClientId
   state.settings.paidBreakIntervalHours = intervalHours
   state.settings.paidBreakMinutes = paidBreak
+
+  if (previousGoogleClientId !== googleClientId) {
+    googleTokenClient = null
+    googleAccessToken = ''
+    googleTokenExpiresAt = 0
+  }
+
   saveState()
   setHint(el.settingsHint, t('settingsSaved'))
   render()
@@ -608,24 +678,249 @@ async function onImportJson(event) {
   try {
     const text = await file.text()
     const parsed = JSON.parse(text)
-    const imported = normalizeImportedState(parsed)
-
-    state.settings = {
-      ...state.settings,
-      ...imported.settings,
-    }
-
-    const mergedSessions = mergeById(state.sessions, imported.sessions)
-    const mergedAwards = mergeById(state.paidBreakAwards, imported.paidBreakAwards)
-    saveState()
-    hydrateInputs()
-    render()
-    setHint(el.jsonHint, t('importDone', { count: mergedSessions + mergedAwards }))
+    const merged = applyImportedState(parsed)
+    setHint(el.jsonHint, t('importDone', { count: merged }))
   } catch {
     setHint(el.jsonHint, t('importFailed'))
   } finally {
     event.target.value = ''
   }
+}
+
+async function onConnectGoogleDrive() {
+  try {
+    await requestGoogleAccessToken(true)
+    setHint(el.googleHint, t('googleConnected'))
+  } catch (error) {
+    setHint(el.googleHint, t('googleSyncFailed', { reason: error.message }))
+  }
+}
+
+async function onCopyOrigins() {
+  const text = getSuggestedGoogleOrigins().join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    setHint(el.setupHelpHint, t('originsCopied'))
+  } catch {
+    setHint(el.setupHelpHint, t('originsCopyFailed'))
+  }
+}
+
+function renderGoogleSetupOrigins() {
+  el.originsText.textContent = getSuggestedGoogleOrigins().join('\n')
+}
+
+function getSuggestedGoogleOrigins() {
+  const origins = new Set(['https://lucasenns.github.io'])
+  const currentOrigin = String(window.location.origin || '')
+  if (currentOrigin.startsWith('http://') || currentOrigin.startsWith('https://')) {
+    origins.add(currentOrigin)
+  }
+  origins.add('http://localhost')
+  return [...origins]
+}
+
+async function onPullFromGoogleDrive() {
+  try {
+    const fileId = await findGoogleDriveFileId(true)
+    if (!fileId) {
+      setHint(el.googleHint, t('googleNoBackup'))
+      return
+    }
+
+    const remoteState = await downloadGoogleDriveState(fileId)
+    const merged = applyImportedState(remoteState)
+    setHint(el.googleHint, t('googlePullDone', { count: merged }))
+  } catch (error) {
+    setHint(el.googleHint, t('googleSyncFailed', { reason: error.message }))
+  }
+}
+
+async function onPushToGoogleDrive() {
+  try {
+    const fileId = await upsertGoogleDriveState(getSerializableState())
+    state.settings.googleDriveFileId = fileId
+    saveState()
+    setHint(el.googleHint, t('googlePushDone'))
+  } catch (error) {
+    setHint(el.googleHint, t('googleSyncFailed', { reason: error.message }))
+  }
+}
+
+function applyImportedState(input) {
+  const imported = normalizeImportedState(input)
+  state.settings = {
+    ...state.settings,
+    ...imported.settings,
+  }
+
+  const mergedSessions = mergeById(state.sessions, imported.sessions)
+  const mergedAwards = mergeById(state.paidBreakAwards, imported.paidBreakAwards)
+  saveState()
+  hydrateInputs()
+  render()
+  return mergedSessions + mergedAwards
+}
+
+function getSerializableState() {
+  return {
+    version: APP_VERSION,
+    settings: state.settings,
+    sessions: state.sessions,
+    paidBreakAwards: state.paidBreakAwards,
+    activeSession: state.activeSession,
+    lastProject: state.lastProject,
+    activeRunStart: state.activeRunStart,
+    activeBreaksGranted: state.activeBreaksGranted,
+    updatedAt: Date.now(),
+  }
+}
+
+function ensureGoogleIdentityReady() {
+  if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+    throw new Error(t('googleApiUnavailable'))
+  }
+}
+
+function ensureGoogleClientId() {
+  const id = (state.settings.googleClientId || '').trim()
+  if (!id) {
+    throw new Error(t('googleClientIdRequired'))
+  }
+  return id
+}
+
+function initGoogleTokenClient() {
+  ensureGoogleIdentityReady()
+  const clientId = ensureGoogleClientId()
+
+  if (googleTokenClient && googleTokenClient.__clientId === clientId) {
+    return googleTokenClient
+  }
+
+  googleTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: GOOGLE_DRIVE_SCOPE,
+    callback: () => {},
+  })
+  googleTokenClient.__clientId = clientId
+  return googleTokenClient
+}
+
+async function requestGoogleAccessToken(interactive) {
+  if (googleAccessToken && Date.now() < googleTokenExpiresAt - 30_000) {
+    return googleAccessToken
+  }
+
+  const tokenClient = initGoogleTokenClient()
+
+  return new Promise((resolve, reject) => {
+    tokenClient.callback = (response) => {
+      if (!response || response.error || !response.access_token) {
+        reject(new Error(response?.error || 'Token request failed'))
+        return
+      }
+      googleAccessToken = response.access_token
+      const expiresIn = Number(response.expires_in || 3600)
+      googleTokenExpiresAt = Date.now() + expiresIn * 1000
+      resolve(googleAccessToken)
+    }
+
+    try {
+      tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' })
+    } catch (error) {
+      reject(error)
+    }
+  })
+}
+
+async function googleApiFetch(url, options = {}, interactive = true) {
+  const token = await requestGoogleAccessToken(interactive)
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    ...(options.headers || {}),
+  }
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || `HTTP ${response.status}`)
+  }
+
+  return response
+}
+
+async function findGoogleDriveFileId(interactive) {
+  if (state.settings.googleDriveFileId) {
+    return state.settings.googleDriveFileId
+  }
+
+  const query = encodeURIComponent(
+    `name='${GOOGLE_SYNC_FILENAME}' and trashed=false and 'appDataFolder' in parents`,
+  )
+  const url = `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=appDataFolder&fields=files(id,name,modifiedTime)`
+  const response = await googleApiFetch(url, {}, interactive)
+  const data = await response.json()
+  const file = data.files?.[0]
+  if (!file?.id) {
+    return ''
+  }
+  state.settings.googleDriveFileId = file.id
+  saveState()
+  return file.id
+}
+
+async function downloadGoogleDriveState(fileId) {
+  const response = await googleApiFetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+    {},
+    true,
+  )
+  const text = await response.text()
+  return JSON.parse(text)
+}
+
+async function upsertGoogleDriveState(snapshot) {
+  const existingFileId = await findGoogleDriveFileId(true)
+  const boundary = `boundary_${Date.now()}`
+  const metadata = existingFileId
+    ? { name: GOOGLE_SYNC_FILENAME, mimeType: 'application/json' }
+    : { name: GOOGLE_SYNC_FILENAME, mimeType: 'application/json', parents: ['appDataFolder'] }
+
+  const multipartBody = [
+    `--${boundary}`,
+    'Content-Type: application/json; charset=UTF-8',
+    '',
+    JSON.stringify(metadata),
+    `--${boundary}`,
+    'Content-Type: application/json',
+    '',
+    JSON.stringify(snapshot),
+    `--${boundary}--`,
+    '',
+  ].join('\r\n')
+
+  const url = existingFileId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart`
+    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'
+
+  const method = existingFileId ? 'PATCH' : 'POST'
+  const response = await googleApiFetch(
+    url,
+    {
+      method,
+      headers: {
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body: multipartBody,
+    },
+    true,
+  )
+  const result = await response.json()
+  return result.id || existingFileId
 }
 
 function onAddEntry() {

@@ -465,6 +465,45 @@ input[type='time']::-webkit-date-and-time-value {
   gap: 10px;
 }
 
+.setup-help {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.setup-help-title,
+.setup-help-origins-label {
+  margin: 0;
+  font-weight: 700;
+}
+
+.setup-help-links {
+  display: grid;
+  gap: 6px;
+}
+
+.setup-help-links a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.setup-help-links a:hover {
+  text-decoration: underline;
+}
+
+.setup-help-origins {
+  margin: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+}
+
 #saveSettingsBtn {
   margin-top: 12px;
 }

@@ -70,6 +70,36 @@ Live app: https://lucasenns.github.io/Time-Tracker/
 - Import JSON merges by record `id` (does not duplicate existing ids).
 - Export Project CSV from Projects.
 
+## Google Drive Sync (Experimental Branch)
+
+You can sync through a connected Google account using Drive `appDataFolder`.
+
+### One-time setup
+
+1. Create a Google Cloud project.
+2. Configure OAuth consent screen.
+3. Create an OAuth Client ID for Web application.
+4. Add your app origin(s), for example:
+
+- `https://lucasenns.github.io`
+- `http://localhost` (optional for local testing)
+
+5. Copy the OAuth Client ID.
+
+### In the app
+
+1. Open Settings > Data.
+2. Paste OAuth Client ID into Google OAuth Client ID.
+3. Click Save Settings.
+4. Click Connect Google Drive and authorize.
+5. Use Pull From Google Drive or Push To Google Drive.
+
+Notes:
+
+- Scope used: `https://www.googleapis.com/auth/drive.appdata`
+- Sync file name: `time-tracker-sync.json`
+- Pull merges by record id (same merge behavior as JSON import).
+
 ## Run Locally
 
 Open [index.html](index.html) directly in a browser.
