@@ -15,7 +15,6 @@ let projectInputPrevious = state.activeSession?.project || state.lastProject || 
 
 const el = {
   liveTimer: document.getElementById('liveTimer'),
-  sessionMeta: document.getElementById('sessionMeta'),
   startStopBtn: document.getElementById('startStopBtn'),
 
   projectOpenBtn: document.getElementById('projectOpenBtn'),
@@ -28,7 +27,6 @@ const el = {
 
   projectInput: document.getElementById('projectInput'),
   projectDropdown: document.getElementById('projectDropdown'),
-  projectHint: document.getElementById('projectHint'),
   projectBreakdownList: document.getElementById('projectBreakdownList'),
   projectDataHint: document.getElementById('projectDataHint'),
 
@@ -115,10 +113,8 @@ function onClockToggle() {
   if (state.activeSession) {
     processPaidBreakAwards()
     closeActiveSession({ keepRun: false })
-    setHint(el.projectHint, 'Clocked out.')
   } else {
     startSession(getProjectInput())
-    setHint(el.projectHint, 'Clocked in.')
   }
   render()
 }
@@ -140,7 +136,7 @@ function onProjectChanged() {
       const renamedCount = renameProjectEverywhere(previousProject, nextProject)
       saveState()
       setHint(
-        el.projectHint,
+        el.projectDataHint,
         `Renamed ${previousProject} to ${nextProject} (${renamedCount} records).`,
       )
       render()
@@ -160,7 +156,7 @@ function onProjectChanged() {
   processPaidBreakAwards()
   closeActiveSession({ keepRun: true })
   startSession(nextProject, { keepRun: true })
-  setHint(el.projectHint, `Switched project to ${nextProject}.`)
+  setHint(el.projectDataHint, `Switched project to ${nextProject}.`)
   projectInputPrevious = nextProject
   render()
 }
@@ -355,11 +351,6 @@ function processPaidBreakAwards() {
       project: state.activeSession.project,
       durationMs: state.settings.paidBreakMinutes * 60 * 1000,
     })
-
-    setHint(
-      el.projectHint,
-      `Added paid break (${state.settings.paidBreakMinutes}m) to ${state.activeSession.project}.`,
-    )
   }
 
   saveState()
@@ -389,9 +380,6 @@ function render() {
 
   const running = Boolean(state.activeSession)
   el.startStopBtn.textContent = running ? 'Clock Out' : 'Clock In'
-  el.sessionMeta.textContent = running
-    ? `On Shift • ${state.activeSession.project || 'General'}`
-    : 'Stopped'
 }
 
 function renderProjects() {

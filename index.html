@@ -11,14 +11,42 @@
   <body>
     <main class="app">
       <header class="topbar">
-        <h1>Time Tracker</h1>
         <div class="top-actions">
           <button id="projectOpenBtn" class="btn menu-btn" type="button">Projects</button>
           <button id="settingsOpenBtn" class="btn menu-btn" type="button">Settings</button>
         </div>
       </header>
 
-      <p class="subhead">Mobile-first, local-only, no backend.</p>
+      <section class="panel hero">
+        <div class="timer-wrap">
+          <p class="label">Time Tracker</p>
+          <p id="liveTimer" class="timer">00:00:00</p>
+        </div>
+
+        <div class="controls">
+          <button id="startStopBtn" class="btn primary clock-btn" type="button">Clock In</button>
+        </div>
+
+        <label class="field project-main-field">
+          <span>Active Project</span>
+          <div class="project-input-wrap">
+            <input
+              id="projectInput"
+              type="text"
+              placeholder="General"
+              maxlength="80"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false" />
+            <div
+              id="projectDropdown"
+              class="project-dropdown"
+              role="listbox"
+              aria-label="Recent projects"></div>
+          </div>
+        </label>
+      </section>
 
       <section class="stats-grid">
         <article class="panel stat">
@@ -46,46 +74,13 @@
           </div>
         </article>
       </section>
-
-      <section class="panel hero">
-        <div class="timer-wrap">
-          <p class="label">Current Shift</p>
-          <p id="liveTimer" class="timer">00:00:00</p>
-          <p id="sessionMeta" class="meta">Stopped</p>
-        </div>
-
-        <div class="controls">
-          <button id="startStopBtn" class="btn primary clock-btn" type="button">Clock In</button>
-        </div>
-
-        <label class="field project-main-field">
-          <span>Active Project</span>
-          <div class="project-input-wrap">
-            <input
-              id="projectInput"
-              type="text"
-              placeholder="General"
-              maxlength="80"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false" />
-            <div
-              id="projectDropdown"
-              class="project-dropdown"
-              role="listbox"
-              aria-label="Recent projects"></div>
-          </div>
-        </label>
-        <p id="projectHint" class="hint"></p>
-      </section>
     </main>
 
     <aside id="projectOverlay" class="menu-overlay" aria-hidden="true">
       <section class="menu-sheet">
         <header class="menu-header">
           <h2>Projects</h2>
-          <button id="projectCloseBtn" class="btn" type="button">Close</button>
+          <button id="projectCloseBtn" class="btn menu-btn" type="button">Close</button>
         </header>
 
         <section class="menu-section">
@@ -103,7 +98,7 @@
       <section class="menu-sheet">
         <header class="menu-header">
           <h2>Settings</h2>
-          <button id="settingsCloseBtn" class="btn" type="button">Close</button>
+          <button id="settingsCloseBtn" class="btn menu-btn" type="button">Close</button>
         </header>
 
         <section class="menu-section">
