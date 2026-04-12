@@ -33,6 +33,7 @@ let isApplyingRemoteState = false
 const PROJECT_ADD_NEW_TOKEN = '__add_new__'
 const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
 const GOOGLE_SYNC_FILENAME = 'time-tracker-sync.json'
+const GOOGLE_TOKEN_CACHE_KEY = `${STORAGE_KEY}-google-token`
 const UI_LANGUAGE = String(navigator.language || 'en')
   .toLowerCase()
   .startsWith('fr')
@@ -351,6 +352,7 @@ const el = {
 init()
 
 function init() {
+  hydrateCachedGoogleToken()
   applyTranslations()
   renderGoogleSetupOrigins()
   bindEvents()
@@ -701,6 +703,7 @@ function onSaveSettings() {
     googleTokenClient = null
     googleAccessToken = ''
     googleTokenExpiresAt = 0
+    clearCachedGoogleToken()
   }
 
   saveState({ immediatePush: false })
@@ -1038,6 +1041,9 @@ async function flushAutoSyncPush() {
 async function checkGoogleSessionStatus() {
   if (!state.settings.googleClientId) {
     googleReconnectNeeded = false
+    googleAccessToken = ''
+    googleTokenExpiresAt = 0
+    clearCachedGoogleToken()
     return
   }
 
@@ -1085,6 +1091,55 @@ function ensureGoogleClientId() {
   return id
 }
 
+function hydrateCachedGoogleToken() {
+  const raw = localStorage.getItem(GOOGLE_TOKEN_CACHE_KEY)
+  if (!raw) {
+    return
+  }
+
+  try {
+    const cached = JSON.parse(raw)
+    const clientId = ensureGoogleClientId()
+    const token = String(cached?.accessToken || '')
+    const expiresAt = Number(cached?.expiresAt || 0)
+    const cachedClientId = String(cached?.clientId || '')
+
+    if (!token || !Number.isFinite(expiresAt) || cachedClientId !== clientId) {
+      clearCachedGoogleToken()
+      return
+    }
+
+    if (Date.now() >= expiresAt - 30_000) {
+      clearCachedGoogleToken()
+      return
+    }
+
+    googleAccessToken = token
+    googleTokenExpiresAt = expiresAt
+  } catch {
+    clearCachedGoogleToken()
+  }
+}
+
+function saveCachedGoogleToken() {
+  const clientId = (state.settings.googleClientId || '').trim()
+  if (!googleAccessToken || !googleTokenExpiresAt || !clientId) {
+    clearCachedGoogleToken()
+    return
+  }
+
+  const payload = {
+    accessToken: googleAccessToken,
+    expiresAt: googleTokenExpiresAt,
+    clientId,
+  }
+  localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY, JSON.stringify(payload))
+}
+
+function clearCachedGoogleToken() {
+  localStorage.removeItem(GOOGLE_TOKEN_CACHE_KEY)
+}
+
 function initGoogleTokenClient() {
   ensureGoogleIdentityReady()
   ensureGoogleOAuthOriginSupported()
@@ -1104,6 +1159,10 @@ function initGoogleTokenClient() {
 }
 
 async function requestGoogleAccessToken(interactive) {
+  if (!googleAccessToken || Date.now() >= googleTokenExpiresAt - 30_000) {
+    hydrateCachedGoogleToken()
+  }
+
   if (googleAccessToken && Date.now() < googleTokenExpiresAt - 30_000) {
     return googleAccessToken
   }
@@ -1113,18 +1172,25 @@ async function requestGoogleAccessToken(interactive) {
   return new Promise((resolve, reject) => {
     tokenClient.callback = (response) => {
       if (!response || response.error || !response.access_token) {
+        googleAccessToken = ''
+        googleTokenExpiresAt = 0
+        clearCachedGoogleToken()
         reject(new Error(response?.error || 'Token request failed'))
         return
       }
       googleAccessToken = response.access_token
       const expiresIn = Number(response.expires_in || 3600)
       googleTokenExpiresAt = Date.now() + expiresIn * 1000
+      saveCachedGoogleToken()
       resolve(googleAccessToken)
     }
 
     try {
       tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' })
     } catch (error) {
+      googleAccessToken = ''
+      googleTokenExpiresAt = 0
+      clearCachedGoogleToken()
       reject(error)
     }
   })
