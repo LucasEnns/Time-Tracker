@@ -1,5 +1,6 @@
 :root {
   color-scheme: light dark;
+  --page-gutter: 12px;
   --bg-top: #dbe8ff;
   --bg-mid: #f2f7ff;
   --bg-bot: #f8fbff;
@@ -53,7 +54,7 @@ body {
 .app {
   max-width: 780px;
   margin: 0 auto;
-  padding: 14px 12px 24px;
+  padding: 14px var(--page-gutter) 24px;
   display: grid;
   gap: 10px;
 }
@@ -61,8 +62,13 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
+}
+
+.topbar h1 {
+  margin: 0;
+  letter-spacing: 0.01em;
 }
 
 .top-actions {
@@ -234,14 +240,23 @@ select {
   gap: 8px;
 }
 
+.stat {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  column-gap: 10px;
+}
+
 .stat .value {
-  margin: 8px 0 0;
-  font-size: clamp(1.1rem, 4vw, 1.45rem);
+  margin: 0;
+  text-align: right;
+  font-size: clamp(1.22rem, 4.2vw, 1.57rem);
   font-weight: 700;
 }
 
 .stat-subrow {
-  margin-top: 10px;
+  grid-column: 1 / -1;
+  margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
   display: flex;
@@ -301,7 +316,7 @@ select {
 .menu-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(8, 16, 28, 0.42);
+  background: linear-gradient(180deg, var(--bg-top), var(--bg-mid) 40%, var(--bg-bot));
   z-index: 40;
   opacity: 0;
   pointer-events: none;
@@ -314,11 +329,15 @@ select {
 }
 
 .menu-sheet {
+  display: grid;
+  gap: 10px;
+  align-content: start;
   height: 100%;
-  width: 100%;
-  background: linear-gradient(180deg, var(--bg-top), var(--bg-mid) 42%, var(--bg-bot));
+  width: min(100%, 780px);
+  margin: 0 auto;
+  background: transparent;
   overflow-y: auto;
-  padding: 14px 12px 18px;
+  padding: 14px var(--page-gutter) 24px;
 }
 
 .menu-header {
@@ -332,11 +351,10 @@ select {
 }
 
 .menu-section {
-  margin-top: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 12px;
+  border-radius: var(--radius);
+  padding: 14px;
   box-shadow: var(--shadow);
 }
 
@@ -357,14 +375,19 @@ select {
 }
 
 @media (min-width: 700px) {
+  :root {
+    --page-gutter: 20px;
+  }
+
   .app {
-    padding: 22px 20px 36px;
+    padding: 22px var(--page-gutter) 36px;
     gap: 14px;
   }
 
   .menu-sheet {
-    max-width: 860px;
-    margin: 0 auto;
+    gap: 14px;
+    width: min(100%, 780px);
+    padding: 22px var(--page-gutter) 36px;
     border-radius: 20px;
   }
 
