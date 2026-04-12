@@ -475,6 +475,10 @@ input[type='time']::-webkit-date-and-time-value {
   gap: 8px;
 }
 
+.setup-help[hidden] {
+  display: none;
+}
+
 .setup-help-title,
 .setup-help-origins-label {
   margin: 0;
