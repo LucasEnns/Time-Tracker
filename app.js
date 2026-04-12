@@ -22,6 +22,11 @@ let pendingDeleteEntryId = null
 let googleTokenClient = null
 let googleAccessToken = ''
 let googleTokenExpiresAt = 0
+let googleReconnectNeeded = false
+let autoSyncPullAttempted = false
+let autoSyncPushPending = false
+let autoSyncPushTimer = null
+let isApplyingRemoteState = false
 
 const PROJECT_ADD_NEW_TOKEN = '__add_new__'
 const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
@@ -91,6 +96,10 @@ const I18N = {
     googlePullDone: 'Pulled and merged {count} records from Google Drive.',
     googlePushDone: 'Pushed current data to Google Drive.',
     googleSyncFailed: 'Google Drive sync failed: {reason}',
+    googleReconnectRequired:
+      'Google reconnect is required to keep sync active. Tap Connect Google Drive.',
+    googleOriginUnsupported:
+      'Google OAuth is not supported from file://. Open the app from https://lucasenns.github.io/Time-Tracker/ or a localhost server.',
     googleSetupHelp: 'Google Setup Help',
     openDriveApiPage: 'Open Drive API Page',
     openConsentPage: 'Open OAuth Consent Screen',
@@ -199,6 +208,10 @@ const I18N = {
     googlePullDone: '{count} enregistrements recuperes et fusionnes depuis Google Drive.',
     googlePushDone: 'Donnees actuelles envoyees vers Google Drive.',
     googleSyncFailed: 'Echec de synchronisation Google Drive: {reason}',
+    googleReconnectRequired:
+      'Une reconnexion Google est requise pour garder la synchronisation active. Appuyez sur Connecter Google Drive.',
+    googleOriginUnsupported:
+      'OAuth Google n est pas pris en charge depuis file://. Ouvrez l app depuis https://lucasenns.github.io/Time-Tracker/ ou un serveur localhost.',
     googleSetupHelp: 'Aide configuration Google',
     openDriveApiPage: 'Ouvrir la page API Drive',
     openConsentPage: 'Ouvrir l ecran de consentement OAuth',
@@ -321,6 +334,8 @@ function init() {
   hydrateInputs()
   ensureTicker()
   render()
+  void checkGoogleSessionStatus()
+  void runAutoSyncPullOnInit()
 }
 
 function t(key, vars = {}) {
@@ -409,6 +424,10 @@ function bindEvents() {
     if (event.target === el.deleteEntryConfirm) {
       closeDeleteConfirm()
     }
+  })
+
+  window.addEventListener('focus', () => {
+    void checkGoogleSessionStatus()
   })
 }
 
@@ -690,8 +709,10 @@ async function onImportJson(event) {
 async function onConnectGoogleDrive() {
   try {
     await requestGoogleAccessToken(true)
+    googleReconnectNeeded = false
     setHint(el.googleHint, t('googleConnected'))
   } catch (error) {
+    googleReconnectNeeded = true
     setHint(el.googleHint, t('googleSyncFailed', { reason: error.message }))
   }
 }
@@ -729,7 +750,7 @@ async function onPullFromGoogleDrive() {
     }
 
     const remoteState = await downloadGoogleDriveState(fileId)
-    const merged = applyImportedState(remoteState)
+    const merged = applyImportedState(remoteState, { suppressAutoPush: true })
     setHint(el.googleHint, t('googlePullDone', { count: merged }))
   } catch (error) {
     setHint(el.googleHint, t('googleSyncFailed', { reason: error.message }))
@@ -747,19 +768,114 @@ async function onPushToGoogleDrive() {
   }
 }
 
-function applyImportedState(input) {
+function applyImportedStateInternal(input, options = {}) {
+  const suppressAutoPush = Boolean(options.suppressAutoPush)
   const imported = normalizeImportedState(input)
-  state.settings = {
-    ...state.settings,
-    ...imported.settings,
+  isApplyingRemoteState = suppressAutoPush
+  try {
+    state.settings = {
+      ...state.settings,
+      ...imported.settings,
+    }
+
+    const mergedSessions = mergeById(state.sessions, imported.sessions)
+    const mergedAwards = mergeById(state.paidBreakAwards, imported.paidBreakAwards)
+    saveState()
+    hydrateInputs()
+    render()
+    return mergedSessions + mergedAwards
+  } finally {
+    isApplyingRemoteState = false
+  }
+}
+
+function applyImportedState(input, options = {}) {
+  return applyImportedStateInternal(input, options)
+}
+
+async function runAutoSyncPullOnInit() {
+  if (!state.settings.googleClientId) {
+    autoSyncPullAttempted = true
+    return
   }
 
-  const mergedSessions = mergeById(state.sessions, imported.sessions)
-  const mergedAwards = mergeById(state.paidBreakAwards, imported.paidBreakAwards)
-  saveState()
-  hydrateInputs()
-  render()
-  return mergedSessions + mergedAwards
+  try {
+    const fileId = await findGoogleDriveFileId(false)
+    if (!fileId) {
+      autoSyncPullAttempted = true
+      return
+    }
+
+    const remoteState = await downloadGoogleDriveState(fileId, false)
+    applyImportedState(remoteState, { suppressAutoPush: true })
+  } catch {
+    googleReconnectNeeded = true
+    if (state.settings.googleClientId) {
+      setHint(el.googleHint, t('googleReconnectRequired'))
+    }
+    // Keep silent on automatic pull failures; manual connect/pull remains available.
+  } finally {
+    autoSyncPullAttempted = true
+    if (autoSyncPushPending) {
+      scheduleAutoSyncPush()
+    }
+  }
+}
+
+function scheduleAutoSyncPush() {
+  if (isApplyingRemoteState || !state.settings.googleClientId) {
+    return
+  }
+
+  if (googleReconnectNeeded) {
+    setHint(el.googleHint, t('googleReconnectRequired'))
+    return
+  }
+
+  autoSyncPushPending = true
+  if (autoSyncPushTimer) {
+    clearTimeout(autoSyncPushTimer)
+  }
+
+  autoSyncPushTimer = setTimeout(() => {
+    void flushAutoSyncPush()
+  }, 1500)
+}
+
+async function flushAutoSyncPush() {
+  if (!autoSyncPushPending || !state.settings.googleClientId) {
+    return
+  }
+  if (!autoSyncPullAttempted) {
+    return
+  }
+
+  autoSyncPushPending = false
+  try {
+    const fileId = await upsertGoogleDriveState(getSerializableState(), false)
+    googleReconnectNeeded = false
+    state.settings.googleDriveFileId = fileId
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(getSerializableState()))
+  } catch {
+    googleReconnectNeeded = true
+    setHint(el.googleHint, t('googleReconnectRequired'))
+    // Silent failure for automatic push; manual push remains available.
+  }
+}
+
+async function checkGoogleSessionStatus() {
+  if (!state.settings.googleClientId) {
+    googleReconnectNeeded = false
+    return
+  }
+
+  try {
+    await requestGoogleAccessToken(false)
+    googleReconnectNeeded = false
+  } catch {
+    googleReconnectNeeded = true
+    setHint(el.googleHint, t('googleReconnectRequired'))
+  }
 }
 
 function getSerializableState() {
@@ -782,6 +898,13 @@ function ensureGoogleIdentityReady() {
   }
 }
 
+function ensureGoogleOAuthOriginSupported() {
+  const protocol = String(window.location.protocol || '').toLowerCase()
+  if (protocol === 'file:') {
+    throw new Error(t('googleOriginUnsupported'))
+  }
+}
+
 function ensureGoogleClientId() {
   const id = (state.settings.googleClientId || '').trim()
   if (!id) {
@@ -792,6 +915,7 @@ function ensureGoogleClientId() {
 
 function initGoogleTokenClient() {
   ensureGoogleIdentityReady()
+  ensureGoogleOAuthOriginSupported()
   const clientId = ensureGoogleClientId()
 
   if (googleTokenClient && googleTokenClient.__clientId === clientId) {
@@ -873,18 +997,18 @@ async function findGoogleDriveFileId(interactive) {
   return file.id
 }
 
-async function downloadGoogleDriveState(fileId) {
+async function downloadGoogleDriveState(fileId, interactive = true) {
   const response = await googleApiFetch(
     `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
     {},
-    true,
+    interactive,
   )
   const text = await response.text()
   return JSON.parse(text)
 }
 
-async function upsertGoogleDriveState(snapshot) {
-  const existingFileId = await findGoogleDriveFileId(true)
+async function upsertGoogleDriveState(snapshot, interactive = true) {
+  const existingFileId = await findGoogleDriveFileId(interactive)
   const boundary = `boundary_${Date.now()}`
   const metadata = existingFileId
     ? { name: GOOGLE_SYNC_FILENAME, mimeType: 'application/json' }
@@ -917,7 +1041,7 @@ async function upsertGoogleDriveState(snapshot) {
       },
       body: multipartBody,
     },
-    true,
+    interactive,
   )
   const result = await response.json()
   return result.id || existingFileId
@@ -1516,6 +1640,7 @@ function processPaidBreakAwards() {
   const elapsed = Date.now() - state.activeRunStart
   const shouldHaveGranted = Math.floor(elapsed / intervalMs)
 
+  let didChange = false
   while (state.activeBreaksGranted < shouldHaveGranted) {
     state.activeBreaksGranted += 1
     const awardTime = state.activeRunStart + state.activeBreaksGranted * intervalMs
@@ -1526,9 +1651,12 @@ function processPaidBreakAwards() {
       project: state.activeSession.project,
       durationMs: state.settings.paidBreakMinutes * 60 * 1000,
     })
+    didChange = true
   }
 
-  saveState()
+  if (didChange) {
+    saveState()
+  }
 }
 
 function ensureTicker() {
@@ -2135,6 +2263,8 @@ function saveState() {
       updatedAt: Date.now(),
     }),
   )
+
+  scheduleAutoSyncPush()
 }
 
 function defaultState() {
