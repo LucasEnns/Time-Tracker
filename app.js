@@ -3,6 +3,7 @@ const APP_VERSION = 2
 
 const DEFAULT_SETTINGS = {
   targetHoursPerWeek: 40,
+  targetDaysPerWeek: 5,
   trackingStartDate: '',
   paidBreakIntervalHours: 3.75,
   paidBreakMinutes: 15,
@@ -38,6 +39,7 @@ const el = {
   yearDelta: document.getElementById('yearDelta'),
 
   targetHoursInput: document.getElementById('targetHoursInput'),
+  targetDaysInput: document.getElementById('targetDaysInput'),
   startDateInput: document.getElementById('startDateInput'),
   breakIntervalHoursInput: document.getElementById('breakIntervalHoursInput'),
   paidBreakMinutesInput: document.getElementById('paidBreakMinutesInput'),
@@ -102,6 +104,7 @@ function bindEvents() {
 
 function hydrateInputs() {
   el.targetHoursInput.value = String(state.settings.targetHoursPerWeek)
+  el.targetDaysInput.value = String(state.settings.targetDaysPerWeek)
   el.startDateInput.value = state.settings.trackingStartDate || ''
   el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
   el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
@@ -178,6 +181,7 @@ function onDocumentClick(event) {
 
 function onSaveSettings() {
   const target = Number(el.targetHoursInput.value)
+  const targetDays = Number(el.targetDaysInput.value)
   const trackingStartDate = el.startDateInput.value
   const intervalHours = Number(el.breakIntervalHoursInput.value)
   const paidBreak = Number(el.paidBreakMinutesInput.value)
@@ -189,6 +193,11 @@ function onSaveSettings() {
 
   if (!Number.isFinite(intervalHours) || intervalHours <= 0) {
     setHint(el.settingsHint, 'Break interval must be greater than 0 hours.')
+    return
+  }
+
+  if (!Number.isFinite(targetDays) || targetDays < 1 || targetDays > 7) {
+    setHint(el.settingsHint, 'Target days/week must be between 1 and 7.')
     return
   }
 
@@ -206,6 +215,7 @@ function onSaveSettings() {
   }
 
   state.settings.targetHoursPerWeek = target
+  state.settings.targetDaysPerWeek = Math.round(targetDays)
   state.settings.trackingStartDate = trackingStartDate || ''
   state.settings.paidBreakIntervalHours = intervalHours
   state.settings.paidBreakMinutes = paidBreak
@@ -439,8 +449,13 @@ function renderStats() {
   const weekTargetMs = state.settings.targetHoursPerWeek * 60 * 60 * 1000
   const weekDeltaMs = week - weekTargetMs
 
-  const elapsedWeeksSinceStart = Math.max(0, computeElapsedWeeks(trackingStart, now))
-  const targetSinceStartMs = elapsedWeeksSinceStart * weekTargetMs
+  const elapsedTargetDays = computeElapsedTargetDays(
+    trackingStart,
+    now,
+    state.settings.targetDaysPerWeek,
+    state.settings.weekStartsOn,
+  )
+  const targetSinceStartMs = elapsedTargetDays * (weekTargetMs / state.settings.targetDaysPerWeek)
   const yearDeltaMs = totalSinceStart - targetSinceStartMs
 
   const dayBonus = computeAwardRangeMs(startOfDay(now), now)
@@ -624,6 +639,36 @@ function resolveTrackingStart(now) {
 function computeElapsedWeeks(startDate, endDate) {
   const diffMs = Math.max(0, endDate.getTime() - startDate.getTime())
   return diffMs / (7 * 24 * 60 * 60 * 1000)
+}
+
+function computeElapsedTargetDays(startDate, endDate, targetDaysPerWeek, weekStartsOn) {
+  const dayMs = 24 * 60 * 60 * 1000
+  const startMs = startDate.getTime()
+  const endMs = endDate.getTime()
+  if (endMs <= startMs) {
+    return 0
+  }
+
+  const safeTargetDays = Math.max(1, Math.min(7, Math.round(targetDaysPerWeek || 5)))
+  let cursor = startOfDay(startDate)
+  let total = 0
+
+  while (cursor.getTime() < endMs) {
+    const next = new Date(cursor.getTime() + dayMs)
+    const overlapStart = Math.max(cursor.getTime(), startMs)
+    const overlapEnd = Math.min(next.getTime(), endMs)
+
+    if (overlapEnd > overlapStart) {
+      const dayIndexInWeek = (cursor.getDay() - weekStartsOn + 7) % 7
+      if (dayIndexInWeek < safeTargetDays) {
+        total += (overlapEnd - overlapStart) / dayMs
+      }
+    }
+
+    cursor = next
+  }
+
+  return total
 }
 
 function parseDateOnly(value) {
@@ -826,6 +871,9 @@ function normalizeImportedState(input) {
   const settings = {
     ...DEFAULT_SETTINGS,
     ...(input.settings || {}),
+    targetDaysPerWeek: Number.isFinite(Number(input?.settings?.targetDaysPerWeek))
+      ? Math.max(1, Math.min(7, Math.round(Number(input.settings.targetDaysPerWeek))))
+      : DEFAULT_SETTINGS.targetDaysPerWeek,
     paidBreakIntervalHours: Number.isFinite(Number(input?.settings?.paidBreakIntervalHours))
       ? Number(input.settings.paidBreakIntervalHours)
       : inferredHours || DEFAULT_SETTINGS.paidBreakIntervalHours,
@@ -870,6 +918,7 @@ function migrateLegacyState(legacy) {
   const migrated = defaultState()
 
   migrated.settings.targetHoursPerWeek = Number(legacy?.settings?.targetHoursPerWeek) || 40
+  migrated.settings.targetDaysPerWeek = 5
   migrated.settings.paidBreakIntervalHours = 3.75
   migrated.settings.paidBreakMinutes = 15
 

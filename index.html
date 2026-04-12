@@ -50,11 +50,11 @@
 
       <section class="stats-grid">
         <article class="panel stat">
-          <p class="label">Avg / Active Week (Since Start)</p>
-          <p id="yearAvg" class="value">0h 0m</p>
+          <p class="label">Day So Far</p>
+          <p id="daySoFar" class="value">0h 0m</p>
           <div class="stat-subrow">
-            <p class="subkey">Since Start Over / Under</p>
-            <p id="yearDelta" class="subvalue">0h 0m</p>
+            <p class="subkey">Paid Break Added Today</p>
+            <p id="dayBreakBonus" class="subvalue">0h 0m</p>
           </div>
         </article>
         <article class="panel stat">
@@ -66,11 +66,11 @@
           </div>
         </article>
         <article class="panel stat">
-          <p class="label">Day So Far</p>
-          <p id="daySoFar" class="value">0h 0m</p>
+          <p class="label">Avg / Active Week (Since Start)</p>
+          <p id="yearAvg" class="value">0h 0m</p>
           <div class="stat-subrow">
-            <p class="subkey">Paid Break Added Today</p>
-            <p id="dayBreakBonus" class="subvalue">0h 0m</p>
+            <p class="subkey">Since Start Over / Under</p>
+            <p id="yearDelta" class="subvalue">0h 0m</p>
           </div>
         </article>
       </section>
@@ -107,6 +107,10 @@
             <label class="field">
               <span>Target Hours / Week</span>
               <input id="targetHoursInput" type="number" min="1" step="0.5" />
+            </label>
+            <label class="field">
+              <span>Target Days / Week</span>
+              <input id="targetDaysInput" type="number" min="1" max="7" step="1" />
             </label>
             <label class="field">
               <span>Tracking Start Date</span>
