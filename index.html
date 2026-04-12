@@ -217,9 +217,6 @@
               <input id="paidBreakMinutesInput" type="number" min="0" step="1" />
             </label>
           </div>
-          <button id="saveSettingsBtn" class="btn" type="button" data-i18n="saveSettings">
-            Save Settings
-          </button>
           <p id="settingsHint" class="hint"></p>
         </section>
 
@@ -233,8 +230,17 @@
                 type="text"
                 placeholder="xxxxxxxx.apps.googleusercontent.com" />
             </label>
+            <label class="field">
+              <span data-i18n="googlePullMode">Pull Strategy</span>
+              <select id="googlePullModeInput">
+                <option value="remote" data-i18n="pullModeRemote">
+                  Remote Wins (Replace Local)
+                </option>
+                <option value="merge" data-i18n="pullModeMerge">Merge By ID (Additive)</option>
+              </select>
+            </label>
           </div>
-          <div class="setup-help">
+          <div id="googleSetupHelpPanel" class="setup-help">
             <p class="setup-help-title" data-i18n="googleSetupHelp">Google Setup Help</p>
             <div class="setup-help-links">
               <a

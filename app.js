@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
   weekStartsOn: 1,
   googleClientId: '',
   googleDriveFileId: '',
+  googlePullMode: 'remote',
 }
 
 let state = loadState()
@@ -86,6 +87,9 @@ const I18N = {
     exportJson: 'Export JSON',
     importJson: 'Import JSON',
     googleClientId: 'Google OAuth Client ID',
+    googlePullMode: 'Pull Strategy',
+    pullModeRemote: 'Remote Wins (Replace Local)',
+    pullModeMerge: 'Merge By ID (Additive)',
     connectGoogleDrive: 'Connect Google Drive',
     pullFromGoogleDrive: 'Pull From Google Drive',
     pushToGoogleDrive: 'Push To Google Drive',
@@ -94,6 +98,12 @@ const I18N = {
     googleConnected: 'Google Drive connected.',
     googleNoBackup: 'No Google Drive backup file found yet.',
     googlePullDone: 'Pulled and merged {count} records from Google Drive.',
+    googlePullDetailed:
+      'Pulled {sessions} sessions and {awards} awards from Google Drive. Merged {merged}.',
+    googlePullActiveImported: 'Imported running session from Google Drive.',
+    googlePullRemoteDone:
+      'Pulled from Google Drive as source of truth. Local state replaced ({sessions} sessions, {awards} awards).',
+    localBackupCreated: 'Local backup created before replace.',
     googlePushDone: 'Pushed current data to Google Drive.',
     googleSyncFailed: 'Google Drive sync failed: {reason}',
     googleReconnectRequired:
@@ -148,6 +158,7 @@ const I18N = {
     exportJsonDone: 'Exported JSON backup.',
     exportCsvDone: 'Exported project breakdown CSV.',
     importFailed: 'Import failed: invalid file format.',
+    pullModeInvalid: 'Pull strategy is invalid.',
     importDone: 'Imported {count} new records.',
   },
   fr: {
@@ -198,6 +209,9 @@ const I18N = {
     exportJson: 'Exporter JSON',
     importJson: 'Importer JSON',
     googleClientId: 'ID client OAuth Google',
+    googlePullMode: 'Strategie de recuperation',
+    pullModeRemote: 'Le distant gagne (remplacer local)',
+    pullModeMerge: 'Fusion par ID (additif)',
     connectGoogleDrive: 'Connecter Google Drive',
     pullFromGoogleDrive: 'Recuperer depuis Google Drive',
     pushToGoogleDrive: 'Envoyer vers Google Drive',
@@ -206,6 +220,12 @@ const I18N = {
     googleConnected: 'Google Drive connecte.',
     googleNoBackup: 'Aucune sauvegarde Google Drive trouvee pour le moment.',
     googlePullDone: '{count} enregistrements recuperes et fusionnes depuis Google Drive.',
+    googlePullDetailed:
+      '{sessions} sessions et {awards} pauses recuperes depuis Google Drive. {merged} fusionnes.',
+    googlePullActiveImported: 'Session en cours importee depuis Google Drive.',
+    googlePullRemoteDone:
+      'Recuperation Google Drive en source de verite. Etat local remplace ({sessions} sessions, {awards} pauses).',
+    localBackupCreated: 'Sauvegarde locale creee avant remplacement.',
     googlePushDone: 'Donnees actuelles envoyees vers Google Drive.',
     googleSyncFailed: 'Echec de synchronisation Google Drive: {reason}',
     googleReconnectRequired:
@@ -261,6 +281,7 @@ const I18N = {
     exportJsonDone: 'Sauvegarde JSON exportee.',
     exportCsvDone: 'CSV des projets exporte.',
     importFailed: 'Import echoue: format invalide.',
+    pullModeInvalid: 'Strategie de recuperation invalide.',
     importDone: '{count} nouveaux enregistrements importes.',
   },
 }
@@ -307,13 +328,14 @@ const el = {
   startDateInput: document.getElementById('startDateInput'),
   breakIntervalHoursInput: document.getElementById('breakIntervalHoursInput'),
   paidBreakMinutesInput: document.getElementById('paidBreakMinutesInput'),
-  saveSettingsBtn: document.getElementById('saveSettingsBtn'),
   settingsHint: document.getElementById('settingsHint'),
 
   exportBtn: document.getElementById('exportBtn'),
   importInput: document.getElementById('importInput'),
   jsonHint: document.getElementById('jsonHint'),
   googleClientIdInput: document.getElementById('googleClientIdInput'),
+  googleSetupHelpPanel: document.getElementById('googleSetupHelpPanel'),
+  googlePullModeInput: document.getElementById('googlePullModeInput'),
   originsText: document.getElementById('originsText'),
   copyOriginsBtn: document.getElementById('copyOriginsBtn'),
   setupHelpHint: document.getElementById('setupHelpHint'),
@@ -408,7 +430,7 @@ function bindEvents() {
 
   document.addEventListener('click', onDocumentClick)
 
-  el.saveSettingsBtn.addEventListener('click', onSaveSettings)
+  bindLiveSettingsEvents()
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
   el.importInput.addEventListener('change', onImportJson)
@@ -416,6 +438,7 @@ function bindEvents() {
   el.pullGoogleBtn.addEventListener('click', onPullFromGoogleDrive)
   el.pushGoogleBtn.addEventListener('click', onPushToGoogleDrive)
   el.copyOriginsBtn.addEventListener('click', onCopyOrigins)
+  el.googleClientIdInput.addEventListener('input', updateGoogleSetupHelpVisibility)
   el.addEntryBtn.addEventListener('click', onAddEntry)
   el.recentEntriesList.addEventListener('click', onRecentEntriesListClick)
   el.cancelDeleteEntryBtn.addEventListener('click', closeDeleteConfirm)
@@ -431,12 +454,33 @@ function bindEvents() {
   })
 }
 
+function bindLiveSettingsEvents() {
+  const onFinish = () => onSaveSettings()
+  const inputs = [
+    el.targetHoursInput,
+    el.targetDaysInput,
+    el.weekStartsOnInput,
+    el.startDateInput,
+    el.breakIntervalHoursInput,
+    el.paidBreakMinutesInput,
+    el.googleClientIdInput,
+    el.googlePullModeInput,
+  ]
+
+  for (const input of inputs) {
+    input.addEventListener('change', onFinish)
+    input.addEventListener('blur', onFinish)
+  }
+}
+
 function hydrateInputs() {
   el.targetHoursInput.value = String(state.settings.targetHoursPerWeek)
   el.targetDaysInput.value = String(state.settings.targetDaysPerWeek)
   el.weekStartsOnInput.value = String(state.settings.weekStartsOn)
   el.startDateInput.value = state.settings.trackingStartDate || ''
   el.googleClientIdInput.value = state.settings.googleClientId || ''
+  el.googlePullModeInput.value = state.settings.googlePullMode || 'remote'
+  updateGoogleSetupHelpVisibility()
   el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
   el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
   el.projectInput.value = state.activeSession?.project || state.lastProject || 'General'
@@ -599,6 +643,7 @@ function onSaveSettings() {
   const weekStartsOn = Number(el.weekStartsOnInput.value)
   const trackingStartDate = el.startDateInput.value
   const googleClientId = el.googleClientIdInput.value.trim()
+  const googlePullMode = String(el.googlePullModeInput.value || 'remote')
   const intervalHours = Number(el.breakIntervalHoursInput.value)
   const paidBreak = Number(el.paidBreakMinutesInput.value)
 
@@ -635,6 +680,11 @@ function onSaveSettings() {
     return
   }
 
+  if (googlePullMode !== 'remote' && googlePullMode !== 'merge') {
+    setHint(el.settingsHint, t('pullModeInvalid'))
+    return
+  }
+
   const previousGoogleClientId = state.settings.googleClientId || ''
 
   state.settings.targetHoursPerWeek = target
@@ -642,6 +692,7 @@ function onSaveSettings() {
   state.settings.weekStartsOn = Math.round(weekStartsOn)
   state.settings.trackingStartDate = trackingStartDate || ''
   state.settings.googleClientId = googleClientId
+  state.settings.googlePullMode = googlePullMode
   state.settings.paidBreakIntervalHours = intervalHours
   state.settings.paidBreakMinutes = paidBreak
 
@@ -653,7 +704,16 @@ function onSaveSettings() {
 
   saveState()
   setHint(el.settingsHint, t('settingsSaved'))
+  updateGoogleSetupHelpVisibility()
   render()
+}
+
+function updateGoogleSetupHelpVisibility() {
+  if (!el.googleSetupHelpPanel) {
+    return
+  }
+  const hasClientId = Boolean(String(el.googleClientIdInput.value || '').trim())
+  el.googleSetupHelpPanel.hidden = hasClientId
 }
 
 function onExportJson() {
@@ -741,6 +801,10 @@ function getSuggestedGoogleOrigins() {
   return [...origins]
 }
 
+function getGooglePullMode() {
+  return state.settings.googlePullMode === 'merge' ? 'merge' : 'remote'
+}
+
 async function onPullFromGoogleDrive() {
   try {
     const fileId = await findGoogleDriveFileId(true)
@@ -749,9 +813,46 @@ async function onPullFromGoogleDrive() {
       return
     }
 
-    const remoteState = await downloadGoogleDriveState(fileId)
+    const remoteState = await downloadGoogleDriveState(fileId, true)
+    const normalized = normalizeImportedState(remoteState)
+    const pulledSessions = normalized.sessions.length
+    const pulledAwards = normalized.paidBreakAwards.length
+    const mode = getGooglePullMode()
+
+    if (mode === 'remote') {
+      backupLocalSnapshot('pre-remote-replace')
+      replaceLocalStateFromRemote(remoteState, { suppressAutoPush: true })
+      setHint(
+        el.googleHint,
+        `${t('googlePullRemoteDone', {
+          sessions: pulledSessions,
+          awards: pulledAwards,
+        })} ${t('localBackupCreated')}`,
+      )
+      return
+    }
+
     const merged = applyImportedState(remoteState, { suppressAutoPush: true })
-    setHint(el.googleHint, t('googlePullDone', { count: merged }))
+    if (merged === 0 && normalized.activeSession && state.activeSession) {
+      setHint(
+        el.googleHint,
+        `${t('googlePullDetailed', {
+          sessions: pulledSessions,
+          awards: pulledAwards,
+          merged,
+        })} ${t('googlePullActiveImported')}`,
+      )
+      return
+    }
+
+    setHint(
+      el.googleHint,
+      t('googlePullDetailed', {
+        sessions: pulledSessions,
+        awards: pulledAwards,
+        merged,
+      }),
+    )
   } catch (error) {
     setHint(el.googleHint, t('googleSyncFailed', { reason: error.message }))
   }
@@ -780,6 +881,18 @@ function applyImportedStateInternal(input, options = {}) {
 
     const mergedSessions = mergeById(state.sessions, imported.sessions)
     const mergedAwards = mergeById(state.paidBreakAwards, imported.paidBreakAwards)
+
+    if (!state.activeSession && imported.activeSession) {
+      state.activeSession = imported.activeSession
+      state.activeRunStart = imported.activeRunStart || imported.activeSession.start
+      state.activeBreaksGranted = Number.isFinite(Number(imported.activeBreaksGranted))
+        ? Number(imported.activeBreaksGranted)
+        : 0
+      state.lastProject =
+        imported.lastProject || imported.activeSession.project || state.lastProject
+      ensureTicker()
+    }
+
     saveState()
     hydrateInputs()
     render()
@@ -791,6 +904,44 @@ function applyImportedStateInternal(input, options = {}) {
 
 function applyImportedState(input, options = {}) {
   return applyImportedStateInternal(input, options)
+}
+
+function replaceLocalStateFromRemote(input, options = {}) {
+  const suppressAutoPush = Boolean(options.suppressAutoPush)
+  const nextState = normalizeImportedState(input)
+  const localClientId = state.settings.googleClientId || ''
+
+  if (!nextState.settings.googleClientId && localClientId) {
+    nextState.settings.googleClientId = localClientId
+  }
+  if (!nextState.settings.googlePullMode) {
+    nextState.settings.googlePullMode = getGooglePullMode()
+  }
+
+  isApplyingRemoteState = suppressAutoPush
+  try {
+    state = nextState
+    projectInputPrevious = state.activeSession?.project || state.lastProject || 'General'
+    saveState()
+    hydrateInputs()
+    ensureTicker()
+    render()
+  } finally {
+    isApplyingRemoteState = false
+  }
+}
+
+function backupLocalSnapshot(reason) {
+  try {
+    const backup = {
+      reason,
+      backupAt: Date.now(),
+      snapshot: getSerializableState(),
+    }
+    localStorage.setItem(`${STORAGE_KEY}-local-backup`, JSON.stringify(backup))
+  } catch {
+    // Ignore backup write failures; pull still proceeds.
+  }
 }
 
 async function runAutoSyncPullOnInit() {
@@ -807,7 +958,12 @@ async function runAutoSyncPullOnInit() {
     }
 
     const remoteState = await downloadGoogleDriveState(fileId, false)
-    applyImportedState(remoteState, { suppressAutoPush: true })
+    if (getGooglePullMode() === 'remote') {
+      backupLocalSnapshot('pre-auto-remote-replace')
+      replaceLocalStateFromRemote(remoteState, { suppressAutoPush: true })
+    } else {
+      applyImportedState(remoteState, { suppressAutoPush: true })
+    }
   } catch {
     googleReconnectNeeded = true
     if (state.settings.googleClientId) {
@@ -2303,6 +2459,10 @@ function normalizeImportedState(input) {
     paidBreakIntervalHours: Number.isFinite(Number(input?.settings?.paidBreakIntervalHours))
       ? Number(input.settings.paidBreakIntervalHours)
       : inferredHours || DEFAULT_SETTINGS.paidBreakIntervalHours,
+    googlePullMode:
+      input?.settings?.googlePullMode === 'merge' || input?.settings?.googlePullMode === 'remote'
+        ? input.settings.googlePullMode
+        : DEFAULT_SETTINGS.googlePullMode,
   }
 
   const sessions = Array.isArray(input.sessions)

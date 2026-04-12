@@ -82,7 +82,6 @@ You can sync through a connected Google account using Drive `appDataFolder`.
 4. Add your app origin(s), for example:
 
 - `https://lucasenns.github.io`
-- `http://localhost` (optional for local testing)
 
 5. Copy the OAuth Client ID.
 
