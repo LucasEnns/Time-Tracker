@@ -27,6 +27,7 @@ let googleReconnectNeeded = false
 let autoSyncPullAttempted = false
 let autoSyncPushPending = false
 let autoSyncPushTimer = null
+let autoSyncPushInFlight = false
 let isApplyingRemoteState = false
 
 const PROJECT_ADD_NEW_TOKEN = '__add_new__'
@@ -702,7 +703,7 @@ function onSaveSettings() {
     googleTokenExpiresAt = 0
   }
 
-  saveState()
+  saveState({ immediatePush: false })
   setHint(el.settingsHint, t('settingsSaved'))
   updateGoogleSetupHelpVisibility()
   render()
@@ -978,7 +979,9 @@ async function runAutoSyncPullOnInit() {
   }
 }
 
-function scheduleAutoSyncPush() {
+function scheduleAutoSyncPush(options = {}) {
+  const immediate = Boolean(options.immediate)
+
   if (isApplyingRemoteState || !state.settings.googleClientId) {
     return
   }
@@ -991,15 +994,22 @@ function scheduleAutoSyncPush() {
   autoSyncPushPending = true
   if (autoSyncPushTimer) {
     clearTimeout(autoSyncPushTimer)
+    autoSyncPushTimer = null
+  }
+
+  if (immediate) {
+    void flushAutoSyncPush()
+    return
   }
 
   autoSyncPushTimer = setTimeout(() => {
+    autoSyncPushTimer = null
     void flushAutoSyncPush()
   }, 1500)
 }
 
 async function flushAutoSyncPush() {
-  if (!autoSyncPushPending || !state.settings.googleClientId) {
+  if (!autoSyncPushPending || !state.settings.googleClientId || autoSyncPushInFlight) {
     return
   }
   if (!autoSyncPullAttempted) {
@@ -1007,6 +1017,7 @@ async function flushAutoSyncPush() {
   }
 
   autoSyncPushPending = false
+  autoSyncPushInFlight = true
   try {
     const fileId = await upsertGoogleDriveState(getSerializableState(), false)
     googleReconnectNeeded = false
@@ -1016,6 +1027,11 @@ async function flushAutoSyncPush() {
     googleReconnectNeeded = true
     setHint(el.googleHint, t('googleReconnectRequired'))
     // Silent failure for automatic push; manual push remains available.
+  } finally {
+    autoSyncPushInFlight = false
+    if (autoSyncPushPending) {
+      scheduleAutoSyncPush()
+    }
   }
 }
 
@@ -2404,7 +2420,9 @@ function loadState() {
   }
 }
 
-function saveState() {
+function saveState(options = {}) {
+  const immediatePush = options.immediatePush !== false
+
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
@@ -2420,7 +2438,7 @@ function saveState() {
     }),
   )
 
-  scheduleAutoSyncPush()
+  scheduleAutoSyncPush({ immediate: immediatePush })
 }
 
 function defaultState() {
