@@ -29,11 +29,9 @@ let autoSyncPushPending = false
 let autoSyncPushTimer = null
 let autoSyncPushInFlight = false
 let isApplyingRemoteState = false
-let cloudSignInInFlight = false
 
 const PROJECT_ADD_NEW_TOKEN = '__add_new__'
 const FIREBASE_CONFIG_GLOBAL = 'TIME_TRACKER_FIREBASE_CONFIG'
-const CLOUD_SIGNIN_ATTEMPT_KEY = `${STORAGE_KEY}-cloud-signin-attempted`
 const UI_LANGUAGE = String(navigator.language || 'en')
   .toLowerCase()
   .startsWith('fr')
@@ -120,6 +118,7 @@ const I18N = {
     domainsCopyFailed: 'Could not copy domains automatically. Please copy manually.',
     localModeActive: 'Local mode is active. No cloud connection is used.',
     cloudConnecting: 'Cloud mode is active. Connecting to Google and restoring sync.',
+    cloudReconnectNeeded: 'Cloud mode is active, but Google needs to reconnect.',
     cloudStatusSignedOut: 'Not signed in. Local storage is still active.',
     cloudStatusSignedIn: 'Signed in as {email}. Cloud sync is active.',
     cloudInitialUploadDone: 'No cloud backup existed, so your local data was uploaded.',
@@ -246,6 +245,7 @@ const I18N = {
     localModeActive: 'Le mode local est actif. Aucune connexion cloud n est utilisee.',
     cloudConnecting:
       'Le mode cloud est actif. Connexion a Google et restauration de la synchronisation.',
+    cloudReconnectNeeded: 'Le mode cloud est actif, mais Google doit etre reconnecte.',
     cloudStatusSignedOut: 'Non connecte. Le stockage local reste actif.',
     cloudStatusSignedIn: 'Connecte en tant que {email}. La synchronisation cloud est active.',
     cloudInitialUploadDone: 'Aucune sauvegarde cloud n existait, donc vos donnees locales ont ete envoyees.',
@@ -707,7 +707,11 @@ async function onSaveSettings() {
   if (syncMode === 'cloud') {
     initializeFirebaseSync()
     if (previousSyncMode !== 'cloud' && !firebaseUser) {
-      await ensureCloudSignIn()
+      try {
+        await onSignInWithGoogle()
+      } catch {
+        // onSignInWithGoogle already surfaces the failure.
+      }
     }
   } else if (previousSyncMode === 'cloud' && firebaseAuth && firebaseUser) {
     try {
@@ -813,7 +817,7 @@ function renderCloudStatus() {
           email: firebaseUser.email || firebaseUser.displayName || 'Google user',
         })
       : firebaseConfigReady
-        ? t('cloudConnecting')
+        ? t('cloudReconnectNeeded')
         : t('firebaseConfigMissing')
 
   setHint(el.cloudStatus, statusText)
@@ -865,7 +869,6 @@ function getCloudStatePath(uid) {
 function initializeFirebaseSync() {
   if (firebaseAuth || getSyncMode() !== 'cloud') {
     renderCloudStatus()
-    void ensureCloudSignIn()
     return
   }
 
@@ -888,10 +891,6 @@ function initializeFirebaseSync() {
   firebaseConfigReady = true
   renderCloudStatus()
 
-  void firebaseAuth.getRedirectResult().catch((error) => {
-    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
-  })
-
   firebaseAuth.onAuthStateChanged((user) => {
     void handleFirebaseAuthChange(user)
   })
@@ -899,22 +898,15 @@ function initializeFirebaseSync() {
 
 async function handleFirebaseAuthChange(user) {
   firebaseUser = user
-  if (user) {
-    clearCloudSignInAttempt()
-    cloudSignInInFlight = false
-  }
   renderCloudStatus()
 
   if (getSyncMode() !== 'cloud') {
     autoSyncPullAttempted = true
-    clearCloudSignInAttempt()
-    cloudSignInInFlight = false
     return
   }
 
   if (!user) {
     autoSyncPullAttempted = true
-    void ensureCloudSignIn()
     return
   }
 
@@ -942,52 +934,46 @@ async function handleFirebaseAuthChange(user) {
       scheduleAutoSyncPush()
     }
   }
-}
-
-function hasCloudSignInAttempt() {
-  return sessionStorage.getItem(CLOUD_SIGNIN_ATTEMPT_KEY) === '1'
-}
-
-function markCloudSignInAttempt() {
-  sessionStorage.setItem(CLOUD_SIGNIN_ATTEMPT_KEY, '1')
-}
-
-function clearCloudSignInAttempt() {
-  sessionStorage.removeItem(CLOUD_SIGNIN_ATTEMPT_KEY)
-}
-
-async function ensureCloudSignIn() {
-  if (
-    getSyncMode() !== 'cloud' ||
-    !firebaseConfigReady ||
-    !firebaseAuth ||
-    firebaseUser ||
-    cloudSignInInFlight ||
-    hasCloudSignInAttempt()
-  ) {
-    return
-  }
-
+async function onSignInWithGoogle() {
   try {
+    if (getSyncMode() !== 'cloud') {
+      throw new Error(t('signInRequired'))
+    }
     ensureFirebaseOriginSupported()
-    cloudSignInInFlight = true
-    markCloudSignInAttempt()
+    initializeFirebaseSync()
+    ensureFirebaseReady({ requireUser: false })
     const provider = new window.firebase.auth.GoogleAuthProvider()
-    await firebaseAuth.signInWithRedirect(provider)
+    await firebaseAuth.signInWithPopup(provider)
+    setHint(el.cloudHint, t('firebaseConnected'))
   } catch (error) {
-    cloudSignInInFlight = false
     setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
   }
 }
 
 function applyImportedStateInternal(input, options = {}) {
   const suppressAutoPush = Boolean(options.suppressAutoPush)
+  const hasImportedSyncMode = Boolean(
+    input?.settings && Object.prototype.hasOwnProperty.call(input.settings, 'syncMode'),
+  )
+  const hasImportedCloudPullMode = Boolean(
+    input?.settings && Object.prototype.hasOwnProperty.call(input.settings, 'cloudPullMode'),
+  )
+  const currentSyncMode = getSyncMode()
+  const currentCloudPullMode = getCloudPullMode()
   const imported = normalizeImportedState(input)
   isApplyingRemoteState = suppressAutoPush
   try {
     state.settings = {
       ...state.settings,
       ...imported.settings,
+    }
+
+    if (!hasImportedSyncMode) {
+      state.settings.syncMode = currentSyncMode
+    }
+
+    if (!hasImportedCloudPullMode) {
+      state.settings.cloudPullMode = currentCloudPullMode
     }
 
     const mergedSessions = mergeById(state.sessions, imported.sessions)
@@ -1019,9 +1005,20 @@ function applyImportedState(input, options = {}) {
 
 function replaceLocalStateFromRemote(input, options = {}) {
   const suppressAutoPush = Boolean(options.suppressAutoPush)
+  const hasImportedSyncMode = Boolean(
+    input?.settings && Object.prototype.hasOwnProperty.call(input.settings, 'syncMode'),
+  )
+  const hasImportedCloudPullMode = Boolean(
+    input?.settings && Object.prototype.hasOwnProperty.call(input.settings, 'cloudPullMode'),
+  )
+  const currentSyncMode = getSyncMode()
+  const currentCloudPullMode = getCloudPullMode()
   const nextState = normalizeImportedState(input)
-  if (!nextState.settings.cloudPullMode) {
-    nextState.settings.cloudPullMode = getCloudPullMode()
+  if (!hasImportedSyncMode) {
+    nextState.settings.syncMode = currentSyncMode
+  }
+  if (!hasImportedCloudPullMode) {
+    nextState.settings.cloudPullMode = currentCloudPullMode
   }
 
   isApplyingRemoteState = suppressAutoPush
