@@ -224,15 +224,8 @@
           <h3 data-i18n="data">Data</h3>
           <div class="settings-grid">
             <label class="field">
-              <span data-i18n="googleClientId">Google OAuth Client ID</span>
-              <input
-                id="googleClientIdInput"
-                type="text"
-                placeholder="xxxxxxxx.apps.googleusercontent.com" />
-            </label>
-            <label class="field">
-              <span data-i18n="googlePullMode">Pull Strategy</span>
-              <select id="googlePullModeInput">
+              <span data-i18n="cloudPullMode">Pull Strategy</span>
+              <select id="cloudPullModeInput">
                 <option value="remote" data-i18n="pullModeRemote">
                   Remote Wins (Replace Local)
                 </option>
@@ -240,37 +233,38 @@
               </select>
             </label>
           </div>
-          <div id="googleSetupHelpPanel" class="setup-help">
-            <p class="setup-help-title" data-i18n="googleSetupHelp">Google Setup Help</p>
+          <p id="cloudStatus" class="hint"></p>
+          <div id="cloudSetupHelpPanel" class="setup-help">
+            <p class="setup-help-title" data-i18n="firebaseSetupHelp">Firebase Setup Help</p>
             <div class="setup-help-links">
               <a
-                href="https://console.cloud.google.com/apis/library/drive.googleapis.com"
+                href="https://console.firebase.google.com/"
                 target="_blank"
                 rel="noreferrer"
-                data-i18n="openDriveApiPage"
-                >Open Drive API Page</a
+                data-i18n="openFirebaseConsole"
+                >Open Firebase Console</a
               >
               <a
-                href="https://console.cloud.google.com/auth/overview"
+                href="https://console.firebase.google.com/project/_/authentication/providers"
                 target="_blank"
                 rel="noreferrer"
-                data-i18n="openConsentPage"
-                >Open OAuth Consent Screen</a
+                data-i18n="openFirebaseAuthPage"
+                >Open Auth Providers</a
               >
               <a
-                href="https://console.cloud.google.com/apis/credentials"
+                href="https://console.firebase.google.com/project/_/database"
                 target="_blank"
                 rel="noreferrer"
-                data-i18n="openCredentialsPage"
-                >Open OAuth Credentials</a
+                data-i18n="openFirebaseDatabasePage"
+                >Open Realtime Database</a
               >
             </div>
-            <p class="setup-help-origins-label" data-i18n="authorizedOrigins">
-              Authorized JavaScript Origins
+            <p class="setup-help-origins-label" data-i18n="authorizedDomains">
+              Authorized Domains
             </p>
-            <pre id="originsText" class="setup-help-origins"></pre>
-            <button id="copyOriginsBtn" class="btn" type="button" data-i18n="copyOrigins">
-              Copy Origins
+            <pre id="authDomainsText" class="setup-help-origins"></pre>
+            <button id="copyAuthDomainsBtn" class="btn" type="button" data-i18n="copyDomains">
+              Copy Domains
             </button>
             <p id="setupHelpHint" class="hint"></p>
           </div>
@@ -280,23 +274,29 @@
             </button>
             <label class="btn file-btn" for="importInput" data-i18n="importJson">Import JSON</label>
             <input id="importInput" type="file" accept="application/json" hidden />
-            <button id="connectGoogleBtn" class="btn" type="button" data-i18n="connectGoogleDrive">
-              Connect Google Drive
+            <button id="signInGoogleBtn" class="btn" type="button" data-i18n="signInWithGoogle">
+              Sign In with Google
             </button>
-            <button id="pullGoogleBtn" class="btn" type="button" data-i18n="pullFromGoogleDrive">
-              Pull From Google Drive
+            <button id="signOutBtn" class="btn" type="button" data-i18n="signOut">
+              Sign Out
             </button>
-            <button id="pushGoogleBtn" class="btn" type="button" data-i18n="pushToGoogleDrive">
-              Push To Google Drive
+            <button id="pullCloudBtn" class="btn" type="button" data-i18n="pullFromCloud">
+              Pull From Cloud
+            </button>
+            <button id="pushCloudBtn" class="btn" type="button" data-i18n="pushToCloud">
+              Push To Cloud
             </button>
           </div>
-          <p id="googleHint" class="hint"></p>
+          <p id="cloudHint" class="hint"></p>
           <p id="jsonHint" class="hint"></p>
         </section>
       </section>
     </aside>
 
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

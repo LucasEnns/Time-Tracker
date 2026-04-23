@@ -131,6 +131,11 @@ body {
   cursor: pointer;
 }
 
+.btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .btn:focus-visible,
 input:focus-visible,
 select:focus-visible {

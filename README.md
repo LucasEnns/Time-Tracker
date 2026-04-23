@@ -46,6 +46,7 @@ Live app: https://lucasenns.github.io/Time-Tracker/
 ## Data Storage
 
 - Stored locally in browser localStorage under key `time-tracker-v2`.
+- Optional Firebase cloud sync stores the same serialized JSON blob per signed-in user in Realtime Database.
 - Main saved shape:
   - `version`
   - `settings`
@@ -70,38 +71,56 @@ Live app: https://lucasenns.github.io/Time-Tracker/
 - Import JSON merges by record `id` (does not duplicate existing ids).
 - Export Project CSV from Projects.
 
-## Google Drive Sync (Experimental Branch)
+## Firebase Cloud Sync
 
-You can sync through a connected Google account using Drive `appDataFolder`.
+You can sync through Firebase Realtime Database using Google sign-in.
 
 ### One-time setup
 
-1. Create a Google Cloud project.
-2. Configure OAuth consent screen.
-3. Create an OAuth Client ID for Web application.
-4. Add your app origin(s), for example:
+1. Create a Firebase project.
+2. In Authentication, enable the Google provider.
+3. In Authentication > Settings > Authorized domains, add the domains you use for the app, for example:
 
-- `https://lucasenns.github.io`
+- `lucasenns.github.io`
+- `localhost`
 
-5. Copy the OAuth Client ID.
+4. Create a Realtime Database in locked mode.
+5. Add rules so each user can only read and write their own blob:
+
+```json
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    }
+  }
+}
+```
+
+6. Open `firebase-config.example.js`, copy the values into `firebase-config.js`, and fill in your Firebase web app config.
 
 ### In the app
 
 1. Open Settings > Data.
-2. Paste OAuth Client ID into Google OAuth Client ID.
-3. Click Save Settings.
-4. Click Connect Google Drive and authorize.
-5. Use Pull From Google Drive or Push To Google Drive.
+2. Choose the pull strategy.
+3. Click Sign In with Google.
+4. The app will automatically upload your local state if no remote blob exists yet.
+5. Use Pull From Cloud or Push To Cloud if you want a manual sync.
 
 Notes:
 
-- Scope used: `https://www.googleapis.com/auth/drive.appdata`
-- Sync file name: `time-tracker-sync.json`
-- Pull merges by record id (same merge behavior as JSON import).
+- The cloud record is stored at `users/{uid}/timeTracker/state`.
+- Automatic saves still write to localStorage first, then push the same blob to Firebase.
+- Pull uses the same merge-by-id behavior as JSON import when pull mode is `merge`.
 
 ## Run Locally
 
-Open [index.html](index.html) directly in a browser.
+For basic local-only use, open [index.html](index.html) directly in a browser.
+
+For Firebase auth and cloud sync, serve the folder from localhost instead of `file://`, for example with any static server.
 
 ## Deploy / Update GitHub Pages
 

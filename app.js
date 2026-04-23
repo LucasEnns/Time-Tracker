@@ -8,9 +8,7 @@ const DEFAULT_SETTINGS = {
   paidBreakIntervalHours: 3.75,
   paidBreakMinutes: 15,
   weekStartsOn: 1,
-  googleClientId: '',
-  googleDriveFileId: '',
-  googlePullMode: 'remote',
+  cloudPullMode: 'remote',
 }
 
 let state = loadState()
@@ -20,10 +18,11 @@ let projectAddMode = false
 let entryProjectAddMode = false
 let openEntryEditorId = null
 let pendingDeleteEntryId = null
-let googleTokenClient = null
-let googleAccessToken = ''
-let googleTokenExpiresAt = 0
-let googleReconnectNeeded = false
+let firebaseApp = null
+let firebaseAuth = null
+let firebaseDatabase = null
+let firebaseUser = null
+let firebaseConfigReady = false
 let autoSyncPullAttempted = false
 let autoSyncPushPending = false
 let autoSyncPushTimer = null
@@ -31,9 +30,7 @@ let autoSyncPushInFlight = false
 let isApplyingRemoteState = false
 
 const PROJECT_ADD_NEW_TOKEN = '__add_new__'
-const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
-const GOOGLE_SYNC_FILENAME = 'time-tracker-sync.json'
-const GOOGLE_TOKEN_CACHE_KEY = `${STORAGE_KEY}-google-token`
+const FIREBASE_CONFIG_GLOBAL = 'TIME_TRACKER_FIREBASE_CONFIG'
 const UI_LANGUAGE = String(navigator.language || 'en')
   .toLowerCase()
   .startsWith('fr')
@@ -88,38 +85,40 @@ const I18N = {
     data: 'Data',
     exportJson: 'Export JSON',
     importJson: 'Import JSON',
-    googleClientId: 'Google OAuth Client ID',
-    googlePullMode: 'Pull Strategy',
+    cloudPullMode: 'Pull Strategy',
     pullModeRemote: 'Remote Wins (Replace Local)',
     pullModeMerge: 'Merge By ID (Additive)',
-    connectGoogleDrive: 'Connect Google Drive',
-    pullFromGoogleDrive: 'Pull From Google Drive',
-    pushToGoogleDrive: 'Push To Google Drive',
-    googleClientIdRequired: 'Google OAuth Client ID is required for Drive sync.',
-    googleApiUnavailable: 'Google API is not available yet. Please retry in a moment.',
-    googleConnected: 'Google Drive connected.',
-    googleNoBackup: 'No Google Drive backup file found yet.',
-    googlePullDone: 'Pulled and merged {count} records from Google Drive.',
-    googlePullDetailed:
-      'Pulled {sessions} sessions and {awards} awards from Google Drive. Merged {merged}.',
-    googlePullActiveImported: 'Imported running session from Google Drive.',
-    googlePullRemoteDone:
-      'Pulled from Google Drive as source of truth. Local state replaced ({sessions} sessions, {awards} awards).',
+    signInWithGoogle: 'Sign In with Google',
+    signOut: 'Sign Out',
+    pullFromCloud: 'Pull From Cloud',
+    pushToCloud: 'Push To Cloud',
+    firebaseUnavailable: 'Firebase is not available yet. Please retry in a moment.',
+    firebaseConfigMissing:
+      'Firebase is not configured yet. Add firebase-config.js and enable Google sign-in plus Realtime Database.',
+    firebaseConnected: 'Signed in with Google.',
+    cloudNoBackup: 'No cloud backup exists for this account yet.',
+    cloudPullDetailed:
+      'Pulled {sessions} sessions and {awards} awards from cloud storage. Merged {merged}.',
+    cloudPullActiveImported: 'Imported running session from cloud storage.',
+    cloudPullRemoteDone:
+      'Pulled from cloud storage as source of truth. Local state replaced ({sessions} sessions, {awards} awards).',
     localBackupCreated: 'Local backup created before replace.',
-    googlePushDone: 'Pushed current data to Google Drive.',
-    googleSyncFailed: 'Google Drive sync failed: {reason}',
-    googleReconnectRequired:
-      'Google reconnect is required to keep sync active. Tap Connect Google Drive.',
-    googleOriginUnsupported:
-      'Google OAuth is not supported from file://. Open the app from https://lucasenns.github.io/Time-Tracker/ or a localhost server.',
-    googleSetupHelp: 'Google Setup Help',
-    openDriveApiPage: 'Open Drive API Page',
-    openConsentPage: 'Open OAuth Consent Screen',
-    openCredentialsPage: 'Open OAuth Credentials',
-    authorizedOrigins: 'Authorized JavaScript Origins',
-    copyOrigins: 'Copy Origins',
-    originsCopied: 'Origins copied to clipboard.',
-    originsCopyFailed: 'Could not copy origins automatically. Please copy manually.',
+    cloudPushDone: 'Pushed current data to cloud storage.',
+    firebaseSyncFailed: 'Cloud sync failed: {reason}',
+    signInRequired: 'Sign in with Google to use cloud sync.',
+    firebaseOriginUnsupported:
+      'Google sign-in is not supported from file://. Open the app from https://lucasenns.github.io/Time-Tracker/ or a localhost server.',
+    firebaseSetupHelp: 'Firebase Setup Help',
+    openFirebaseConsole: 'Open Firebase Console',
+    openFirebaseAuthPage: 'Open Auth Providers',
+    openFirebaseDatabasePage: 'Open Realtime Database',
+    authorizedDomains: 'Authorized Domains',
+    copyDomains: 'Copy Domains',
+    domainsCopied: 'Domains copied to clipboard.',
+    domainsCopyFailed: 'Could not copy domains automatically. Please copy manually.',
+    cloudStatusSignedOut: 'Not signed in. Local storage is still active.',
+    cloudStatusSignedIn: 'Signed in as {email}. Cloud sync is active.',
+    cloudInitialUploadDone: 'No cloud backup existed, so your local data was uploaded.',
     general: 'General',
     addNewProject: '+ Add New Project',
     typeNewProject: 'Type a new project name to add it.',
@@ -210,38 +209,40 @@ const I18N = {
     data: 'Donnees',
     exportJson: 'Exporter JSON',
     importJson: 'Importer JSON',
-    googleClientId: 'ID client OAuth Google',
-    googlePullMode: 'Strategie de recuperation',
+    cloudPullMode: 'Strategie de recuperation',
     pullModeRemote: 'Le distant gagne (remplacer local)',
     pullModeMerge: 'Fusion par ID (additif)',
-    connectGoogleDrive: 'Connecter Google Drive',
-    pullFromGoogleDrive: 'Recuperer depuis Google Drive',
-    pushToGoogleDrive: 'Envoyer vers Google Drive',
-    googleClientIdRequired: 'L ID client OAuth Google est requis pour la synchronisation Drive.',
-    googleApiUnavailable: 'API Google indisponible pour l instant. Reessayez dans un moment.',
-    googleConnected: 'Google Drive connecte.',
-    googleNoBackup: 'Aucune sauvegarde Google Drive trouvee pour le moment.',
-    googlePullDone: '{count} enregistrements recuperes et fusionnes depuis Google Drive.',
-    googlePullDetailed:
-      '{sessions} sessions et {awards} pauses recuperes depuis Google Drive. {merged} fusionnes.',
-    googlePullActiveImported: 'Session en cours importee depuis Google Drive.',
-    googlePullRemoteDone:
-      'Recuperation Google Drive en source de verite. Etat local remplace ({sessions} sessions, {awards} pauses).',
+    signInWithGoogle: 'Se connecter avec Google',
+    signOut: 'Se deconnecter',
+    pullFromCloud: 'Recuperer depuis le cloud',
+    pushToCloud: 'Envoyer vers le cloud',
+    firebaseUnavailable: 'Firebase est indisponible pour l instant. Reessayez dans un moment.',
+    firebaseConfigMissing:
+      'Firebase n est pas encore configure. Ajoutez firebase-config.js et activez Google Sign-In avec Realtime Database.',
+    firebaseConnected: 'Connexion Google etablie.',
+    cloudNoBackup: 'Aucune sauvegarde cloud n existe encore pour ce compte.',
+    cloudPullDetailed:
+      '{sessions} sessions et {awards} pauses recuperes depuis le cloud. {merged} fusionnes.',
+    cloudPullActiveImported: 'Session en cours importee depuis le cloud.',
+    cloudPullRemoteDone:
+      'Recuperation cloud en source de verite. Etat local remplace ({sessions} sessions, {awards} pauses).',
     localBackupCreated: 'Sauvegarde locale creee avant remplacement.',
-    googlePushDone: 'Donnees actuelles envoyees vers Google Drive.',
-    googleSyncFailed: 'Echec de synchronisation Google Drive: {reason}',
-    googleReconnectRequired:
-      'Une reconnexion Google est requise pour garder la synchronisation active. Appuyez sur Connecter Google Drive.',
-    googleOriginUnsupported:
-      'OAuth Google n est pas pris en charge depuis file://. Ouvrez l app depuis https://lucasenns.github.io/Time-Tracker/ ou un serveur localhost.',
-    googleSetupHelp: 'Aide configuration Google',
-    openDriveApiPage: 'Ouvrir la page API Drive',
-    openConsentPage: 'Ouvrir l ecran de consentement OAuth',
-    openCredentialsPage: 'Ouvrir les identifiants OAuth',
-    authorizedOrigins: 'Origines JavaScript autorisees',
-    copyOrigins: 'Copier les origines',
-    originsCopied: 'Origines copiees dans le presse-papiers.',
-    originsCopyFailed: 'Copie automatique impossible. Copiez manuellement.',
+    cloudPushDone: 'Donnees actuelles envoyees vers le cloud.',
+    firebaseSyncFailed: 'Echec de synchronisation cloud: {reason}',
+    signInRequired: 'Connectez-vous avec Google pour utiliser la synchronisation cloud.',
+    firebaseOriginUnsupported:
+      'La connexion Google n est pas prise en charge depuis file://. Ouvrez l app depuis https://lucasenns.github.io/Time-Tracker/ ou un serveur localhost.',
+    firebaseSetupHelp: 'Aide configuration Firebase',
+    openFirebaseConsole: 'Ouvrir Firebase Console',
+    openFirebaseAuthPage: 'Ouvrir les fournisseurs d authentification',
+    openFirebaseDatabasePage: 'Ouvrir Realtime Database',
+    authorizedDomains: 'Domaines autorises',
+    copyDomains: 'Copier les domaines',
+    domainsCopied: 'Domaines copies dans le presse-papiers.',
+    domainsCopyFailed: 'Copie automatique impossible. Copiez manuellement.',
+    cloudStatusSignedOut: 'Non connecte. Le stockage local reste actif.',
+    cloudStatusSignedIn: 'Connecte en tant que {email}. La synchronisation cloud est active.',
+    cloudInitialUploadDone: 'Aucune sauvegarde cloud n existait, donc vos donnees locales ont ete envoyees.',
     general: 'General',
     addNewProject: '+ Ajouter un projet',
     typeNewProject: 'Saisissez un nouveau nom de projet pour l ajouter.',
@@ -335,16 +336,17 @@ const el = {
   exportBtn: document.getElementById('exportBtn'),
   importInput: document.getElementById('importInput'),
   jsonHint: document.getElementById('jsonHint'),
-  googleClientIdInput: document.getElementById('googleClientIdInput'),
-  googleSetupHelpPanel: document.getElementById('googleSetupHelpPanel'),
-  googlePullModeInput: document.getElementById('googlePullModeInput'),
-  originsText: document.getElementById('originsText'),
-  copyOriginsBtn: document.getElementById('copyOriginsBtn'),
+  cloudPullModeInput: document.getElementById('cloudPullModeInput'),
+  cloudStatus: document.getElementById('cloudStatus'),
+  cloudSetupHelpPanel: document.getElementById('cloudSetupHelpPanel'),
+  authDomainsText: document.getElementById('authDomainsText'),
+  copyAuthDomainsBtn: document.getElementById('copyAuthDomainsBtn'),
   setupHelpHint: document.getElementById('setupHelpHint'),
-  connectGoogleBtn: document.getElementById('connectGoogleBtn'),
-  pullGoogleBtn: document.getElementById('pullGoogleBtn'),
-  pushGoogleBtn: document.getElementById('pushGoogleBtn'),
-  googleHint: document.getElementById('googleHint'),
+  signInGoogleBtn: document.getElementById('signInGoogleBtn'),
+  signOutBtn: document.getElementById('signOutBtn'),
+  pullCloudBtn: document.getElementById('pullCloudBtn'),
+  pushCloudBtn: document.getElementById('pushCloudBtn'),
+  cloudHint: document.getElementById('cloudHint'),
 
   exportProjectCsvBtn: document.getElementById('exportProjectCsvBtn'),
 }
@@ -352,15 +354,13 @@ const el = {
 init()
 
 function init() {
-  hydrateCachedGoogleToken()
   applyTranslations()
-  renderGoogleSetupOrigins()
+  renderSuggestedAuthDomains()
   bindEvents()
   hydrateInputs()
   ensureTicker()
   render()
-  void checkGoogleSessionStatus()
-  void runAutoSyncPullOnInit()
+  initializeFirebaseSync()
 }
 
 function t(key, vars = {}) {
@@ -437,11 +437,11 @@ function bindEvents() {
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
   el.importInput.addEventListener('change', onImportJson)
-  el.connectGoogleBtn.addEventListener('click', onConnectGoogleDrive)
-  el.pullGoogleBtn.addEventListener('click', onPullFromGoogleDrive)
-  el.pushGoogleBtn.addEventListener('click', onPushToGoogleDrive)
-  el.copyOriginsBtn.addEventListener('click', onCopyOrigins)
-  el.googleClientIdInput.addEventListener('input', updateGoogleSetupHelpVisibility)
+  el.signInGoogleBtn.addEventListener('click', onSignInWithGoogle)
+  el.signOutBtn.addEventListener('click', onSignOut)
+  el.pullCloudBtn.addEventListener('click', onPullFromCloud)
+  el.pushCloudBtn.addEventListener('click', onPushToCloud)
+  el.copyAuthDomainsBtn.addEventListener('click', onCopyAuthDomains)
   el.addEntryBtn.addEventListener('click', onAddEntry)
   el.recentEntriesList.addEventListener('click', onRecentEntriesListClick)
   el.cancelDeleteEntryBtn.addEventListener('click', closeDeleteConfirm)
@@ -453,7 +453,7 @@ function bindEvents() {
   })
 
   window.addEventListener('focus', () => {
-    void checkGoogleSessionStatus()
+    renderCloudStatus()
   })
 }
 
@@ -466,8 +466,7 @@ function bindLiveSettingsEvents() {
     el.startDateInput,
     el.breakIntervalHoursInput,
     el.paidBreakMinutesInput,
-    el.googleClientIdInput,
-    el.googlePullModeInput,
+    el.cloudPullModeInput,
   ]
 
   for (const input of inputs) {
@@ -481,9 +480,7 @@ function hydrateInputs() {
   el.targetDaysInput.value = String(state.settings.targetDaysPerWeek)
   el.weekStartsOnInput.value = String(state.settings.weekStartsOn)
   el.startDateInput.value = state.settings.trackingStartDate || ''
-  el.googleClientIdInput.value = state.settings.googleClientId || ''
-  el.googlePullModeInput.value = state.settings.googlePullMode || 'remote'
-  updateGoogleSetupHelpVisibility()
+  el.cloudPullModeInput.value = getCloudPullMode()
   el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
   el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
   el.projectInput.value = state.activeSession?.project || state.lastProject || 'General'
@@ -645,8 +642,7 @@ function onSaveSettings() {
   const targetDays = Number(el.targetDaysInput.value)
   const weekStartsOn = Number(el.weekStartsOnInput.value)
   const trackingStartDate = el.startDateInput.value
-  const googleClientId = el.googleClientIdInput.value.trim()
-  const googlePullMode = String(el.googlePullModeInput.value || 'remote')
+  const cloudPullMode = String(el.cloudPullModeInput.value || 'remote')
   const intervalHours = Number(el.breakIntervalHoursInput.value)
   const paidBreak = Number(el.paidBreakMinutesInput.value)
 
@@ -683,41 +679,22 @@ function onSaveSettings() {
     return
   }
 
-  if (googlePullMode !== 'remote' && googlePullMode !== 'merge') {
+  if (cloudPullMode !== 'remote' && cloudPullMode !== 'merge') {
     setHint(el.settingsHint, t('pullModeInvalid'))
     return
   }
-
-  const previousGoogleClientId = state.settings.googleClientId || ''
 
   state.settings.targetHoursPerWeek = target
   state.settings.targetDaysPerWeek = Math.round(targetDays)
   state.settings.weekStartsOn = Math.round(weekStartsOn)
   state.settings.trackingStartDate = trackingStartDate || ''
-  state.settings.googleClientId = googleClientId
-  state.settings.googlePullMode = googlePullMode
+  state.settings.cloudPullMode = cloudPullMode
   state.settings.paidBreakIntervalHours = intervalHours
   state.settings.paidBreakMinutes = paidBreak
 
-  if (previousGoogleClientId !== googleClientId) {
-    googleTokenClient = null
-    googleAccessToken = ''
-    googleTokenExpiresAt = 0
-    clearCachedGoogleToken()
-  }
-
   saveState({ immediatePush: false })
   setHint(el.settingsHint, t('settingsSaved'))
-  updateGoogleSetupHelpVisibility()
   render()
-}
-
-function updateGoogleSetupHelpVisibility() {
-  if (!el.googleSetupHelpPanel) {
-    return
-  }
-  const hasClientId = Boolean(String(el.googleClientIdInput.value || '').trim())
-  el.googleSetupHelpPanel.hidden = hasClientId
 }
 
 function onExportJson() {
@@ -770,65 +747,192 @@ async function onImportJson(event) {
   }
 }
 
-async function onConnectGoogleDrive() {
-  try {
-    await requestGoogleAccessToken(true)
-    googleReconnectNeeded = false
-    setHint(el.googleHint, t('googleConnected'))
-  } catch (error) {
-    googleReconnectNeeded = true
-    setHint(el.googleHint, t('googleSyncFailed', { reason: error.message }))
-  }
-}
-
-async function onCopyOrigins() {
-  const text = getSuggestedGoogleOrigins().join('\n')
+async function onCopyAuthDomains() {
+  const text = getSuggestedAuthDomains().join('\n')
   try {
     await navigator.clipboard.writeText(text)
-    setHint(el.setupHelpHint, t('originsCopied'))
+    setHint(el.setupHelpHint, t('domainsCopied'))
   } catch {
-    setHint(el.setupHelpHint, t('originsCopyFailed'))
+    setHint(el.setupHelpHint, t('domainsCopyFailed'))
   }
 }
 
-function renderGoogleSetupOrigins() {
-  el.originsText.textContent = getSuggestedGoogleOrigins().join('\n')
+function renderSuggestedAuthDomains() {
+  el.authDomainsText.textContent = getSuggestedAuthDomains().join('\n')
 }
 
-function getSuggestedGoogleOrigins() {
-  const origins = new Set(['https://lucasenns.github.io'])
-  const currentOrigin = String(window.location.origin || '')
-  if (currentOrigin.startsWith('http://') || currentOrigin.startsWith('https://')) {
-    origins.add(currentOrigin)
+function getSuggestedAuthDomains() {
+  const domains = new Set(['lucasenns.github.io', 'localhost'])
+  const currentHostname = String(window.location.hostname || '').trim()
+  if (currentHostname) {
+    domains.add(currentHostname)
   }
-  origins.add('http://localhost')
-  return [...origins]
+  return [...domains]
 }
 
-function getGooglePullMode() {
-  return state.settings.googlePullMode === 'merge' ? 'merge' : 'remote'
+function getCloudPullMode() {
+  return state.settings.cloudPullMode === 'merge' ? 'merge' : 'remote'
 }
 
-async function onPullFromGoogleDrive() {
+function renderCloudStatus() {
+  const statusText = firebaseUser
+    ? t('cloudStatusSignedIn', {
+        email: firebaseUser.email || firebaseUser.displayName || 'Google user',
+      })
+    : firebaseConfigReady
+      ? t('cloudStatusSignedOut')
+      : t('firebaseConfigMissing')
+
+  setHint(el.cloudStatus, statusText)
+
+  if (el.cloudSetupHelpPanel) {
+    el.cloudSetupHelpPanel.hidden = firebaseConfigReady
+  }
+
+  el.signInGoogleBtn.disabled = !firebaseConfigReady || Boolean(firebaseUser)
+  el.signOutBtn.disabled = !firebaseUser
+  el.pullCloudBtn.disabled = !firebaseUser
+  el.pushCloudBtn.disabled = !firebaseUser
+}
+
+function getFirebaseConfig() {
+  const config = window[FIREBASE_CONFIG_GLOBAL]
+  if (!config || typeof config !== 'object') {
+    return null
+  }
+
+  const requiredKeys = ['apiKey', 'authDomain', 'databaseURL', 'projectId', 'appId']
+  for (const key of requiredKeys) {
+    if (!String(config[key] || '').trim()) {
+      return null
+    }
+  }
+
+  return config
+}
+
+function ensureFirebaseReady(options = {}) {
+  const requireUser = options.requireUser !== false
+  if (!firebaseConfigReady || !firebaseAuth || !firebaseDatabase) {
+    throw new Error(t('firebaseConfigMissing'))
+  }
+  if (requireUser && !firebaseUser) {
+    throw new Error(t('signInRequired'))
+  }
+}
+
+function ensureFirebaseOriginSupported() {
+  const protocol = String(window.location.protocol || '').toLowerCase()
+  if (protocol === 'file:') {
+    throw new Error(t('firebaseOriginUnsupported'))
+  }
+}
+
+function getCloudStatePath(uid) {
+  return `users/${uid}/timeTracker/state`
+}
+
+function initializeFirebaseSync() {
+  renderCloudStatus()
+
+  if (!window.firebase || typeof window.firebase.initializeApp !== 'function') {
+    autoSyncPullAttempted = true
+    return
+  }
+
+  const config = getFirebaseConfig()
+  if (!config) {
+    autoSyncPullAttempted = true
+    return
+  }
+
+  firebaseApp = window.firebase.apps?.length ? window.firebase.app() : window.firebase.initializeApp(config)
+  firebaseAuth = window.firebase.auth()
+  firebaseDatabase = window.firebase.database()
+  firebaseConfigReady = true
+  renderCloudStatus()
+
+  firebaseAuth.onAuthStateChanged((user) => {
+    void handleFirebaseAuthChange(user)
+  })
+}
+
+async function handleFirebaseAuthChange(user) {
+  firebaseUser = user
+  renderCloudStatus()
+
+  if (!user) {
+    autoSyncPullAttempted = true
+    return
+  }
+
+  autoSyncPullAttempted = false
   try {
-    const fileId = await findGoogleDriveFileId(true)
-    if (!fileId) {
-      setHint(el.googleHint, t('googleNoBackup'))
+    const remoteState = await downloadCloudState(user.uid)
+    if (!remoteState) {
+      await uploadCloudState(getSerializableState(), user.uid)
+      setHint(el.cloudHint, t('cloudInitialUploadDone'))
       return
     }
 
-    const remoteState = await downloadGoogleDriveState(fileId, true)
+    if (getCloudPullMode() === 'remote') {
+      backupLocalSnapshot('pre-auto-remote-replace')
+      replaceLocalStateFromRemote(remoteState, { suppressAutoPush: true })
+    } else {
+      applyImportedState(remoteState, { suppressAutoPush: true })
+    }
+  } catch (error) {
+    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
+  } finally {
+    autoSyncPullAttempted = true
+    renderCloudStatus()
+    if (autoSyncPushPending) {
+      scheduleAutoSyncPush()
+    }
+  }
+}
+
+async function onSignInWithGoogle() {
+  try {
+    ensureFirebaseOriginSupported()
+    ensureFirebaseReady({ requireUser: false })
+    const provider = new window.firebase.auth.GoogleAuthProvider()
+    await firebaseAuth.signInWithPopup(provider)
+    setHint(el.cloudHint, t('firebaseConnected'))
+  } catch (error) {
+    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
+  }
+}
+
+async function onSignOut() {
+  try {
+    ensureFirebaseReady({ requireUser: false })
+    await firebaseAuth.signOut()
+    setHint(el.cloudHint, t('cloudStatusSignedOut'))
+  } catch (error) {
+    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
+  }
+}
+
+async function onPullFromCloud() {
+  try {
+    ensureFirebaseReady()
+    const remoteState = await downloadCloudState(firebaseUser.uid)
+    if (!remoteState) {
+      setHint(el.cloudHint, t('cloudNoBackup'))
+      return
+    }
+
     const normalized = normalizeImportedState(remoteState)
     const pulledSessions = normalized.sessions.length
     const pulledAwards = normalized.paidBreakAwards.length
-    const mode = getGooglePullMode()
 
-    if (mode === 'remote') {
+    if (getCloudPullMode() === 'remote') {
       backupLocalSnapshot('pre-remote-replace')
       replaceLocalStateFromRemote(remoteState, { suppressAutoPush: true })
       setHint(
-        el.googleHint,
-        `${t('googlePullRemoteDone', {
+        el.cloudHint,
+        `${t('cloudPullRemoteDone', {
           sessions: pulledSessions,
           awards: pulledAwards,
         })} ${t('localBackupCreated')}`,
@@ -839,37 +943,36 @@ async function onPullFromGoogleDrive() {
     const merged = applyImportedState(remoteState, { suppressAutoPush: true })
     if (merged === 0 && normalized.activeSession && state.activeSession) {
       setHint(
-        el.googleHint,
-        `${t('googlePullDetailed', {
+        el.cloudHint,
+        `${t('cloudPullDetailed', {
           sessions: pulledSessions,
           awards: pulledAwards,
           merged,
-        })} ${t('googlePullActiveImported')}`,
+        })} ${t('cloudPullActiveImported')}`,
       )
       return
     }
 
     setHint(
-      el.googleHint,
-      t('googlePullDetailed', {
+      el.cloudHint,
+      t('cloudPullDetailed', {
         sessions: pulledSessions,
         awards: pulledAwards,
         merged,
       }),
     )
   } catch (error) {
-    setHint(el.googleHint, t('googleSyncFailed', { reason: error.message }))
+    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
   }
 }
 
-async function onPushToGoogleDrive() {
+async function onPushToCloud() {
   try {
-    const fileId = await upsertGoogleDriveState(getSerializableState())
-    state.settings.googleDriveFileId = fileId
-    saveState()
-    setHint(el.googleHint, t('googlePushDone'))
+    ensureFirebaseReady()
+    await uploadCloudState(getSerializableState(), firebaseUser.uid)
+    setHint(el.cloudHint, t('cloudPushDone'))
   } catch (error) {
-    setHint(el.googleHint, t('googleSyncFailed', { reason: error.message }))
+    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
   }
 }
 
@@ -913,13 +1016,8 @@ function applyImportedState(input, options = {}) {
 function replaceLocalStateFromRemote(input, options = {}) {
   const suppressAutoPush = Boolean(options.suppressAutoPush)
   const nextState = normalizeImportedState(input)
-  const localClientId = state.settings.googleClientId || ''
-
-  if (!nextState.settings.googleClientId && localClientId) {
-    nextState.settings.googleClientId = localClientId
-  }
-  if (!nextState.settings.googlePullMode) {
-    nextState.settings.googlePullMode = getGooglePullMode()
+  if (!nextState.settings.cloudPullMode) {
+    nextState.settings.cloudPullMode = getCloudPullMode()
   }
 
   isApplyingRemoteState = suppressAutoPush
@@ -949,31 +1047,26 @@ function backupLocalSnapshot(reason) {
 }
 
 async function runAutoSyncPullOnInit() {
-  if (!state.settings.googleClientId) {
+  if (!firebaseUser) {
     autoSyncPullAttempted = true
     return
   }
 
   try {
-    const fileId = await findGoogleDriveFileId(false)
-    if (!fileId) {
+    const remoteState = await downloadCloudState(firebaseUser.uid)
+    if (!remoteState) {
       autoSyncPullAttempted = true
       return
     }
 
-    const remoteState = await downloadGoogleDriveState(fileId, false)
-    if (getGooglePullMode() === 'remote') {
+    if (getCloudPullMode() === 'remote') {
       backupLocalSnapshot('pre-auto-remote-replace')
       replaceLocalStateFromRemote(remoteState, { suppressAutoPush: true })
     } else {
       applyImportedState(remoteState, { suppressAutoPush: true })
     }
   } catch {
-    googleReconnectNeeded = true
-    if (state.settings.googleClientId) {
-      setHint(el.googleHint, t('googleReconnectRequired'))
-    }
-    // Keep silent on automatic pull failures; manual connect/pull remains available.
+    // Keep silent on automatic pull failures; manual pull remains available.
   } finally {
     autoSyncPullAttempted = true
     if (autoSyncPushPending) {
@@ -985,12 +1078,7 @@ async function runAutoSyncPullOnInit() {
 function scheduleAutoSyncPush(options = {}) {
   const immediate = Boolean(options.immediate)
 
-  if (isApplyingRemoteState || !state.settings.googleClientId) {
-    return
-  }
-
-  if (googleReconnectNeeded) {
-    setHint(el.googleHint, t('googleReconnectRequired'))
+  if (isApplyingRemoteState || !firebaseUser) {
     return
   }
 
@@ -1012,7 +1100,7 @@ function scheduleAutoSyncPush(options = {}) {
 }
 
 async function flushAutoSyncPush() {
-  if (!autoSyncPushPending || !state.settings.googleClientId || autoSyncPushInFlight) {
+  if (!autoSyncPushPending || !firebaseUser || autoSyncPushInFlight) {
     return
   }
   if (!autoSyncPullAttempted) {
@@ -1022,37 +1110,15 @@ async function flushAutoSyncPush() {
   autoSyncPushPending = false
   autoSyncPushInFlight = true
   try {
-    const fileId = await upsertGoogleDriveState(getSerializableState(), false)
-    googleReconnectNeeded = false
-    state.settings.googleDriveFileId = fileId
+    await uploadCloudState(getSerializableState(), firebaseUser.uid)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(getSerializableState()))
-  } catch {
-    googleReconnectNeeded = true
-    setHint(el.googleHint, t('googleReconnectRequired'))
-    // Silent failure for automatic push; manual push remains available.
+  } catch (error) {
+    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
   } finally {
     autoSyncPushInFlight = false
     if (autoSyncPushPending) {
       scheduleAutoSyncPush()
     }
-  }
-}
-
-async function checkGoogleSessionStatus() {
-  if (!state.settings.googleClientId) {
-    googleReconnectNeeded = false
-    googleAccessToken = ''
-    googleTokenExpiresAt = 0
-    clearCachedGoogleToken()
-    return
-  }
-
-  try {
-    await requestGoogleAccessToken(false)
-    googleReconnectNeeded = false
-  } catch {
-    googleReconnectNeeded = true
-    setHint(el.googleHint, t('googleReconnectRequired'))
   }
 }
 
@@ -1069,220 +1135,15 @@ function getSerializableState() {
     updatedAt: Date.now(),
   }
 }
-
-function ensureGoogleIdentityReady() {
-  if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
-    throw new Error(t('googleApiUnavailable'))
-  }
+async function downloadCloudState(uid) {
+  ensureFirebaseReady({ requireUser: false })
+  const snapshot = await firebaseDatabase.ref(getCloudStatePath(uid)).once('value')
+  return snapshot.exists() ? snapshot.val() : null
 }
 
-function ensureGoogleOAuthOriginSupported() {
-  const protocol = String(window.location.protocol || '').toLowerCase()
-  if (protocol === 'file:') {
-    throw new Error(t('googleOriginUnsupported'))
-  }
-}
-
-function ensureGoogleClientId() {
-  const id = (state.settings.googleClientId || '').trim()
-  if (!id) {
-    throw new Error(t('googleClientIdRequired'))
-  }
-  return id
-}
-
-function hydrateCachedGoogleToken() {
-  const raw = localStorage.getItem(GOOGLE_TOKEN_CACHE_KEY)
-  if (!raw) {
-    return
-  }
-
-  try {
-    const cached = JSON.parse(raw)
-    const clientId = ensureGoogleClientId()
-    const token = String(cached?.accessToken || '')
-    const expiresAt = Number(cached?.expiresAt || 0)
-    const cachedClientId = String(cached?.clientId || '')
-
-    if (!token || !Number.isFinite(expiresAt) || cachedClientId !== clientId) {
-      clearCachedGoogleToken()
-      return
-    }
-
-    if (Date.now() >= expiresAt - 30_000) {
-      clearCachedGoogleToken()
-      return
-    }
-
-    googleAccessToken = token
-    googleTokenExpiresAt = expiresAt
-  } catch {
-    clearCachedGoogleToken()
-  }
-}
-
-function saveCachedGoogleToken() {
-  const clientId = (state.settings.googleClientId || '').trim()
-  if (!googleAccessToken || !googleTokenExpiresAt || !clientId) {
-    clearCachedGoogleToken()
-    return
-  }
-
-  const payload = {
-    accessToken: googleAccessToken,
-    expiresAt: googleTokenExpiresAt,
-    clientId,
-  }
-  localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY, JSON.stringify(payload))
-}
-
-function clearCachedGoogleToken() {
-  localStorage.removeItem(GOOGLE_TOKEN_CACHE_KEY)
-}
-
-function initGoogleTokenClient() {
-  ensureGoogleIdentityReady()
-  ensureGoogleOAuthOriginSupported()
-  const clientId = ensureGoogleClientId()
-
-  if (googleTokenClient && googleTokenClient.__clientId === clientId) {
-    return googleTokenClient
-  }
-
-  googleTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: clientId,
-    scope: GOOGLE_DRIVE_SCOPE,
-    callback: () => {},
-  })
-  googleTokenClient.__clientId = clientId
-  return googleTokenClient
-}
-
-async function requestGoogleAccessToken(interactive) {
-  if (!googleAccessToken || Date.now() >= googleTokenExpiresAt - 30_000) {
-    hydrateCachedGoogleToken()
-  }
-
-  if (googleAccessToken && Date.now() < googleTokenExpiresAt - 30_000) {
-    return googleAccessToken
-  }
-
-  const tokenClient = initGoogleTokenClient()
-
-  return new Promise((resolve, reject) => {
-    tokenClient.callback = (response) => {
-      if (!response || response.error || !response.access_token) {
-        googleAccessToken = ''
-        googleTokenExpiresAt = 0
-        clearCachedGoogleToken()
-        reject(new Error(response?.error || 'Token request failed'))
-        return
-      }
-      googleAccessToken = response.access_token
-      const expiresIn = Number(response.expires_in || 3600)
-      googleTokenExpiresAt = Date.now() + expiresIn * 1000
-      saveCachedGoogleToken()
-      resolve(googleAccessToken)
-    }
-
-    try {
-      tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' })
-    } catch (error) {
-      googleAccessToken = ''
-      googleTokenExpiresAt = 0
-      clearCachedGoogleToken()
-      reject(error)
-    }
-  })
-}
-
-async function googleApiFetch(url, options = {}, interactive = true) {
-  const token = await requestGoogleAccessToken(interactive)
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    ...(options.headers || {}),
-  }
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(text || `HTTP ${response.status}`)
-  }
-
-  return response
-}
-
-async function findGoogleDriveFileId(interactive) {
-  if (state.settings.googleDriveFileId) {
-    return state.settings.googleDriveFileId
-  }
-
-  const query = encodeURIComponent(
-    `name='${GOOGLE_SYNC_FILENAME}' and trashed=false and 'appDataFolder' in parents`,
-  )
-  const url = `https://www.googleapis.com/drive/v3/files?q=${query}&spaces=appDataFolder&fields=files(id,name,modifiedTime)`
-  const response = await googleApiFetch(url, {}, interactive)
-  const data = await response.json()
-  const file = data.files?.[0]
-  if (!file?.id) {
-    return ''
-  }
-  state.settings.googleDriveFileId = file.id
-  saveState()
-  return file.id
-}
-
-async function downloadGoogleDriveState(fileId, interactive = true) {
-  const response = await googleApiFetch(
-    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-    {},
-    interactive,
-  )
-  const text = await response.text()
-  return JSON.parse(text)
-}
-
-async function upsertGoogleDriveState(snapshot, interactive = true) {
-  const existingFileId = await findGoogleDriveFileId(interactive)
-  const boundary = `boundary_${Date.now()}`
-  const metadata = existingFileId
-    ? { name: GOOGLE_SYNC_FILENAME, mimeType: 'application/json' }
-    : { name: GOOGLE_SYNC_FILENAME, mimeType: 'application/json', parents: ['appDataFolder'] }
-
-  const multipartBody = [
-    `--${boundary}`,
-    'Content-Type: application/json; charset=UTF-8',
-    '',
-    JSON.stringify(metadata),
-    `--${boundary}`,
-    'Content-Type: application/json',
-    '',
-    JSON.stringify(snapshot),
-    `--${boundary}--`,
-    '',
-  ].join('\r\n')
-
-  const url = existingFileId
-    ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart`
-    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'
-
-  const method = existingFileId ? 'PATCH' : 'POST'
-  const response = await googleApiFetch(
-    url,
-    {
-      method,
-      headers: {
-        'Content-Type': `multipart/related; boundary=${boundary}`,
-      },
-      body: multipartBody,
-    },
-    interactive,
-  )
-  const result = await response.json()
-  return result.id || existingFileId
+async function uploadCloudState(snapshot, uid) {
+  ensureFirebaseReady({ requireUser: false })
+  await firebaseDatabase.ref(getCloudStatePath(uid)).set(snapshot)
 }
 
 function onAddEntry() {
@@ -2543,10 +2404,12 @@ function normalizeImportedState(input) {
     paidBreakIntervalHours: Number.isFinite(Number(input?.settings?.paidBreakIntervalHours))
       ? Number(input.settings.paidBreakIntervalHours)
       : inferredHours || DEFAULT_SETTINGS.paidBreakIntervalHours,
-    googlePullMode:
-      input?.settings?.googlePullMode === 'merge' || input?.settings?.googlePullMode === 'remote'
-        ? input.settings.googlePullMode
-        : DEFAULT_SETTINGS.googlePullMode,
+    cloudPullMode:
+      input?.settings?.cloudPullMode === 'merge' || input?.settings?.cloudPullMode === 'remote'
+        ? input.settings.cloudPullMode
+        : input?.settings?.googlePullMode === 'merge' || input?.settings?.googlePullMode === 'remote'
+          ? input.settings.googlePullMode
+          : DEFAULT_SETTINGS.cloudPullMode,
   }
 
   const sessions = Array.isArray(input.sessions)
