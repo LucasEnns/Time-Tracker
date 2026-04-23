@@ -895,6 +895,9 @@ async function handleFirebaseAuthChange(user) {
       scheduleAutoSyncPush()
     }
   }
+
+}
+
 async function onSignInWithGoogle() {
   try {
     if (getSyncMode() !== 'cloud') {
