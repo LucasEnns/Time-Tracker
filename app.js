@@ -40,8 +40,8 @@ const UI_LANGUAGE = String(navigator.language || 'en')
 
 const I18N = {
   en: {
-    appTitle: 'Work Tracker',
-    projectsBtn: 'Projects',
+    appTitle: 'Time Tracker',
+    projectsBtn: 'Timeline',
     settingsBtn: 'Settings',
     close: 'Close',
     cancel: 'Cancel',
@@ -82,6 +82,15 @@ const I18N = {
     trackingStartDate: 'Tracking Start Date',
     paidBreakEveryHours: 'Paid Break Every (hours)',
     paidBreakLengthMin: 'Paid Break Length (minutes)',
+    timeOff: 'Holidays / Vacation',
+    daysOff: 'Days',
+    addHoliday: 'Add Holiday',
+    holidayHoursAdded: 'Adds {hours} for {days} day(s).',
+    holidayDateRequired: 'Holiday date is required.',
+    holidayDaysInvalid: 'Holiday days must be greater than 0.',
+    holidayAdded: 'Holiday credit added for {date}.',
+    holidayDeleted: 'Holiday credit deleted.',
+    noHolidays: 'No holiday or vacation days added yet.',
     saveSettings: 'Save Settings',
     data: 'Data',
     syncMode: 'Sync Mode',
@@ -158,8 +167,8 @@ const I18N = {
     importDone: 'Imported {count} new records.',
   },
   fr: {
-    appTitle: 'Suivi du travail',
-    projectsBtn: 'Projets',
+    appTitle: 'Suivi du temps',
+    projectsBtn: 'Chronologie',
     settingsBtn: 'Parametres',
     close: 'Fermer',
     cancel: 'Annuler',
@@ -200,6 +209,15 @@ const I18N = {
     trackingStartDate: 'Date de debut du suivi',
     paidBreakEveryHours: 'Pause payee toutes les (heures)',
     paidBreakLengthMin: 'Duree pause payee (minutes)',
+    timeOff: 'Jours feries / Vacances',
+    daysOff: 'Jours',
+    addHoliday: 'Ajouter un conge',
+    holidayHoursAdded: 'Ajoute {hours} pour {days} jour(s).',
+    holidayDateRequired: 'La date du conge est obligatoire.',
+    holidayDaysInvalid: 'Le nombre de jours doit etre superieur a 0.',
+    holidayAdded: 'Credit de conge ajoute pour le {date}.',
+    holidayDeleted: 'Credit de conge supprime.',
+    noHolidays: 'Aucun jour ferie ou de vacances ajoute pour le moment.',
     saveSettings: 'Enregistrer les parametres',
     data: 'Donnees',
     syncMode: 'Mode de synchronisation',
@@ -322,6 +340,11 @@ const el = {
   breakIntervalHoursInput: document.getElementById('breakIntervalHoursInput'),
   paidBreakMinutesInput: document.getElementById('paidBreakMinutesInput'),
   settingsHint: document.getElementById('settingsHint'),
+  holidayDateInput: document.getElementById('holidayDateInput'),
+  holidayDaysInput: document.getElementById('holidayDaysInput'),
+  addHolidayBtn: document.getElementById('addHolidayBtn'),
+  holidayList: document.getElementById('holidayList'),
+  holidayHint: document.getElementById('holidayHint'),
 
   exportBtn: document.getElementById('exportBtn'),
   importInput: document.getElementById('importInput'),
@@ -419,6 +442,8 @@ function bindEvents() {
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
   el.importInput.addEventListener('change', onImportJson)
+  el.addHolidayBtn.addEventListener('click', onAddHoliday)
+  el.holidayList.addEventListener('click', onHolidayListClick)
   el.addEntryBtn.addEventListener('click', onAddEntry)
   el.recentEntriesList.addEventListener('click', onRecentEntriesListClick)
   el.cancelDeleteEntryBtn.addEventListener('click', closeDeleteConfirm)
@@ -454,6 +479,7 @@ function bindLiveSettingsEvents() {
 }
 
 function hydrateInputs() {
+  const now = new Date()
   el.targetHoursInput.value = String(state.settings.targetHoursPerWeek)
   el.targetDaysInput.value = String(state.settings.targetDaysPerWeek)
   el.weekStartsOnInput.value = String(state.settings.weekStartsOn)
@@ -466,9 +492,10 @@ function hydrateInputs() {
   }
   el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
   el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
+  el.holidayDateInput.value = formatDateInput(now)
+  el.holidayDaysInput.value = '1'
   el.projectInput.value = state.activeSession?.project || state.lastProject || 'General'
   el.entryProjectInput.value = el.projectInput.value
-  const now = new Date()
   el.entryDateInput.value = formatDateInput(now)
   el.entryStartTimeInput.value = '09:00'
   el.entryEndTimeInput.value = '17:00'
@@ -741,6 +768,50 @@ function onExportProjectCsv() {
   setHint(el.projectDataHint, t('exportCsvDone'))
 }
 
+function onAddHoliday() {
+  const dateText = el.holidayDateInput.value
+  const days = Number(el.holidayDaysInput.value)
+  const date = parseDateOnly(dateText)
+
+  if (!date) {
+    setHint(el.holidayHint, t('holidayDateRequired'))
+    return
+  }
+
+  if (!Number.isFinite(days) || days <= 0) {
+    setHint(el.holidayHint, t('holidayDaysInvalid'))
+    return
+  }
+
+  state.holidayCredits.push(createHolidayCredit(date.getTime(), days))
+  saveState()
+  render()
+  setHint(
+    el.holidayHint,
+    `${t('holidayAdded', { date: formatDateInput(date) })} ${t('holidayHoursAdded', {
+      hours: formatDuration(computeHolidayDurationMs(days)),
+      days: formatHolidayDays(days),
+    })}`,
+  )
+}
+
+function onHolidayListClick(event) {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+
+  const id = target.dataset.holidayId
+  if (!id) {
+    return
+  }
+
+  state.holidayCredits = state.holidayCredits.filter((credit) => credit.id !== id)
+  saveState()
+  render()
+  setHint(el.holidayHint, t('holidayDeleted'))
+}
+
 async function onImportJson(event) {
   const file = event.target.files?.[0]
   if (!file) {
@@ -942,6 +1013,7 @@ function applyImportedStateInternal(input, options = {}) {
 
     const mergedSessions = mergeById(state.sessions, imported.sessions)
     const mergedAwards = mergeById(state.paidBreakAwards, imported.paidBreakAwards)
+    const mergedHolidays = mergeById(state.holidayCredits, imported.holidayCredits)
 
     if (!state.activeSession && imported.activeSession) {
       state.activeSession = imported.activeSession
@@ -957,7 +1029,7 @@ function applyImportedStateInternal(input, options = {}) {
     saveState()
     hydrateInputs()
     render()
-    return mergedSessions + mergedAwards
+    return mergedSessions + mergedAwards + mergedHolidays
   } finally {
     isApplyingRemoteState = false
   }
@@ -1756,9 +1828,47 @@ function render() {
   renderStats()
   renderProjectBreakdown(new Date())
   renderRecentEntries(new Date())
+  renderHolidayCredits()
 
   const running = Boolean(state.activeSession)
   el.startStopBtn.textContent = running ? t('clockOut') : t('clockIn')
+}
+
+function renderHolidayCredits() {
+  if (!el.holidayList) {
+    return
+  }
+
+  el.holidayList.innerHTML = ''
+  const rows = [...state.holidayCredits].sort((a, b) => b.at - a.at)
+
+  if (!rows.length) {
+    const empty = document.createElement('p')
+    empty.className = 'hint'
+    empty.textContent = t('noHolidays')
+    el.holidayList.appendChild(empty)
+    return
+  }
+
+  for (const credit of rows) {
+    const row = document.createElement('article')
+    row.className = 'holiday-row'
+    row.innerHTML = `
+      <div>
+        <div class="holiday-row-date">${escapeHtml(formatDateInput(new Date(credit.at)))}</div>
+        <div class="holiday-row-meta">${escapeHtml(
+          t('holidayHoursAdded', {
+            hours: formatDuration(credit.durationMs),
+            days: formatHolidayDays(credit.days),
+          }),
+        )}</div>
+      </div>
+      <button class="btn btn-danger" type="button" data-holiday-id="${escapeHtml(credit.id)}" data-i18n="delete">${t(
+        'delete',
+      )}</button>
+    `
+    el.holidayList.appendChild(row)
+  }
 }
 
 function renderProjects() {
@@ -1940,7 +2050,11 @@ function getProjectBreakdownRows(now) {
 }
 
 function computeRangeTotalMs(startDate, endDate) {
-  return computeSessionRangeMs(startDate, endDate) + computeAwardRangeMs(startDate, endDate)
+  return (
+    computeSessionRangeMs(startDate, endDate) +
+    computeAwardRangeMs(startDate, endDate) +
+    computeHolidayRangeMs(startDate, endDate)
+  )
 }
 
 function computeProjectRangeTotalMs(project, startDate, endDate) {
@@ -1986,6 +2100,19 @@ function computeAwardRangeMs(startDate, endDate, project) {
   return total
 }
 
+function computeHolidayRangeMs(startDate, endDate) {
+  const startMs = startDate ? startDate.getTime() : Number.MIN_SAFE_INTEGER
+  const endMs = endDate.getTime()
+
+  let total = 0
+  for (const credit of state.holidayCredits) {
+    if (credit.at >= startMs && credit.at <= endMs) {
+      total += credit.durationMs
+    }
+  }
+  return total
+}
+
 function materializeSessionsForNow() {
   const sessions = [...state.sessions]
   if (state.activeSession) {
@@ -2023,6 +2150,14 @@ function countActiveWeeks(startDate, endDate, weekStartsOn) {
       continue
     }
     const weekStart = startOfWeek(new Date(award.at), weekStartsOn)
+    keys.add(dayKey(weekStart))
+  }
+
+  for (const credit of state.holidayCredits) {
+    if (credit.at < startDate.getTime() || credit.at > endDate.getTime()) {
+      continue
+    }
+    const weekStart = startOfWeek(new Date(credit.at), weekStartsOn)
     keys.add(dayKey(weekStart))
   }
 
@@ -2207,12 +2342,30 @@ function formatSignedDuration(ms) {
   return `${sign}${formatDuration(Math.abs(ms))}`
 }
 
+function formatHolidayDays(days) {
+  return Number.isInteger(days) ? String(days) : String(days)
+}
+
 function pad(n) {
   return String(n).padStart(2, '0')
 }
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function computeHolidayDurationMs(days) {
+  const dailyHours = state.settings.targetHoursPerWeek / state.settings.targetDaysPerWeek
+  return Math.max(0, dailyHours * days * 60 * 60 * 1000)
+}
+
+function createHolidayCredit(at, days) {
+  return {
+    id: createId(),
+    at,
+    days,
+    durationMs: computeHolidayDurationMs(days),
+  }
 }
 
 function escapeHtml(value) {
@@ -2333,6 +2486,7 @@ function saveState(options = {}) {
       settings: state.settings,
       sessions: state.sessions,
       paidBreakAwards: state.paidBreakAwards,
+      holidayCredits: state.holidayCredits,
       activeSession: state.activeSession,
       lastProject: state.lastProject,
       activeRunStart: state.activeRunStart,
@@ -2350,6 +2504,7 @@ function defaultState() {
     settings: { ...DEFAULT_SETTINGS },
     sessions: [],
     paidBreakAwards: [],
+    holidayCredits: [],
     activeSession: null,
     lastProject: 'General',
     activeRunStart: null,
@@ -2399,6 +2554,12 @@ function normalizeImportedState(input) {
     ? input.paidBreakAwards.map(normalizeAward).filter((award) => award && award.durationMs >= 0)
     : []
 
+  const holidayCredits = Array.isArray(input.holidayCredits)
+    ? input.holidayCredits
+        .map(normalizeHolidayCredit)
+        .filter((credit) => credit && credit.durationMs >= 0)
+    : []
+
   const activeSession = normalizeActiveSession(input.activeSession)
 
   return {
@@ -2406,6 +2567,7 @@ function normalizeImportedState(input) {
     settings,
     sessions,
     paidBreakAwards,
+    holidayCredits,
     activeSession,
     lastProject:
       typeof input.lastProject === 'string' && input.lastProject.trim()
@@ -2524,6 +2686,26 @@ function normalizeActiveSession(session) {
     id: typeof session.id === 'string' ? session.id : createId(),
     start,
     project,
+  }
+}
+
+function normalizeHolidayCredit(credit) {
+  if (!credit || typeof credit !== 'object') {
+    return null
+  }
+
+  const at = Number(credit.at)
+  const days = Number(credit.days)
+  const durationMs = Number(credit.durationMs)
+  if (!Number.isFinite(at) || !Number.isFinite(days) || !Number.isFinite(durationMs)) {
+    return null
+  }
+
+  return {
+    id: typeof credit.id === 'string' ? credit.id : createId(),
+    at,
+    days,
+    durationMs: Math.max(0, durationMs),
   }
 }
 

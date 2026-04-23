@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#e8f0ff" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1520" />
-    <title>Work Tracker</title>
+    <title>Time Tracker</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="app">
       <header class="topbar">
-        <h2 data-i18n="appTitle">Work Tracker</h2>
+        <h2 data-i18n="appTitle">Time Tracker</h2>
         <div class="top-actions">
           <a
             id="projectOpenBtn"
@@ -19,7 +19,7 @@
             data-i18n="projectsBtn"
             href="#projectOverlay"
             onclick="window.timeTrackerSetOverlayOpen && window.timeTrackerSetOverlayOpen('project', true)">
-            Projects
+            Timeline
           </a>
           <a
             id="settingsOpenBtn"
@@ -96,7 +96,7 @@
     <aside id="projectOverlay" class="menu-overlay" aria-hidden="true">
       <section class="menu-sheet">
         <header class="menu-header">
-          <h2 data-i18n="projectsBtn">Projects</h2>
+          <h2 data-i18n="projectsBtn">Timeline</h2>
           <a
             id="projectCloseBtn"
             class="btn menu-btn"
@@ -161,6 +161,27 @@
           </div>
           <div id="recentEntriesList" class="recent-entries-list"></div>
           <p id="entryHint" class="hint"></p>
+        </section>
+
+        <section class="menu-section">
+          <h3 data-i18n="timeOff">Holidays / Vacation</h3>
+          <div class="settings-grid">
+            <label class="field">
+              <span data-i18n="date">Date</span>
+              <input id="holidayDateInput" type="date" />
+            </label>
+            <label class="field">
+              <span data-i18n="daysOff">Days</span>
+              <input id="holidayDaysInput" type="number" min="0.5" step="0.5" />
+            </label>
+          </div>
+          <div class="actions-grid">
+            <button id="addHolidayBtn" class="btn" type="button" data-i18n="addHoliday">
+              Add Holiday
+            </button>
+          </div>
+          <div id="holidayList" class="holiday-list"></div>
+          <p id="holidayHint" class="hint"></p>
         </section>
       </section>
 

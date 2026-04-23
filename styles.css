@@ -326,6 +326,32 @@ input[type='time']::-webkit-date-and-time-value {
   gap: 8px;
 }
 
+.holiday-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.holiday-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.holiday-row-date {
+  font-weight: 700;
+}
+
+.holiday-row-meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .recent-entries-list {
   display: grid;
   gap: 8px;
