@@ -108,14 +108,6 @@ const I18N = {
     signInRequired: 'Sign in with Google to use cloud sync.',
     firebaseOriginUnsupported:
       'Google sign-in is not supported from file://. Open the app from https://lucasenns.github.io/Time-Tracker/ or a localhost server.',
-    firebaseSetupHelp: 'Firebase Setup Help',
-    openFirebaseConsole: 'Open Firebase Console',
-    openFirebaseAuthPage: 'Open Auth Providers',
-    openFirebaseDatabasePage: 'Open Realtime Database',
-    authorizedDomains: 'Authorized Domains',
-    copyDomains: 'Copy Domains',
-    domainsCopied: 'Domains copied to clipboard.',
-    domainsCopyFailed: 'Could not copy domains automatically. Please copy manually.',
     localModeActive: 'Local mode is active. No cloud connection is used.',
     cloudConnecting: 'Cloud mode is active. Connecting to Google and restoring sync.',
     cloudReconnectNeeded: 'Cloud mode is active, but Google needs to reconnect.',
@@ -234,14 +226,6 @@ const I18N = {
     signInRequired: 'Connectez-vous avec Google pour utiliser la synchronisation cloud.',
     firebaseOriginUnsupported:
       'La connexion Google n est pas prise en charge depuis file://. Ouvrez l app depuis https://lucasenns.github.io/Time-Tracker/ ou un serveur localhost.',
-    firebaseSetupHelp: 'Aide configuration Firebase',
-    openFirebaseConsole: 'Ouvrir Firebase Console',
-    openFirebaseAuthPage: 'Ouvrir les fournisseurs d authentification',
-    openFirebaseDatabasePage: 'Ouvrir Realtime Database',
-    authorizedDomains: 'Domaines autorises',
-    copyDomains: 'Copier les domaines',
-    domainsCopied: 'Domaines copies dans le presse-papiers.',
-    domainsCopyFailed: 'Copie automatique impossible. Copiez manuellement.',
     localModeActive: 'Le mode local est actif. Aucune connexion cloud n est utilisee.',
     cloudConnecting:
       'Le mode cloud est actif. Connexion a Google et restauration de la synchronisation.',
@@ -345,10 +329,6 @@ const el = {
   syncModeInput: document.getElementById('syncModeInput'),
   cloudPullModeInput: document.getElementById('cloudPullModeInput'),
   cloudStatus: document.getElementById('cloudStatus'),
-  cloudSetupHelpPanel: document.getElementById('cloudSetupHelpPanel'),
-  authDomainsText: document.getElementById('authDomainsText'),
-  copyAuthDomainsBtn: document.getElementById('copyAuthDomainsBtn'),
-  setupHelpHint: document.getElementById('setupHelpHint'),
   cloudHint: document.getElementById('cloudHint'),
 
   exportProjectCsvBtn: document.getElementById('exportProjectCsvBtn'),
@@ -358,7 +338,6 @@ init()
 
 function init() {
   applyTranslations()
-  renderSuggestedAuthDomains()
   bindEvents()
   hydrateInputs()
   ensureTicker()
@@ -440,9 +419,6 @@ function bindEvents() {
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
   el.importInput.addEventListener('change', onImportJson)
-  if (el.copyAuthDomainsBtn) {
-    el.copyAuthDomainsBtn.addEventListener('click', onCopyAuthDomains)
-  }
   el.addEntryBtn.addEventListener('click', onAddEntry)
   el.recentEntriesList.addEventListener('click', onRecentEntriesListClick)
   el.cancelDeleteEntryBtn.addEventListener('click', closeDeleteConfirm)
@@ -783,31 +759,6 @@ async function onImportJson(event) {
   }
 }
 
-async function onCopyAuthDomains() {
-  const text = getSuggestedAuthDomains().join('\n')
-  try {
-    await navigator.clipboard.writeText(text)
-    setHint(el.setupHelpHint, t('domainsCopied'))
-  } catch {
-    setHint(el.setupHelpHint, t('domainsCopyFailed'))
-  }
-}
-
-function renderSuggestedAuthDomains() {
-  if (el.authDomainsText) {
-    el.authDomainsText.textContent = getSuggestedAuthDomains().join('\n')
-  }
-}
-
-function getSuggestedAuthDomains() {
-  const domains = new Set(['lucasenns.github.io', 'localhost'])
-  const currentHostname = String(window.location.hostname || '').trim()
-  if (currentHostname) {
-    domains.add(currentHostname)
-  }
-  return [...domains]
-}
-
 function getCloudPullMode() {
   return state.settings.cloudPullMode === 'merge' ? 'merge' : 'remote'
 }
@@ -833,10 +784,6 @@ function renderCloudStatus() {
         : t('firebaseConfigMissing')
 
   setHint(el.cloudStatus, statusText)
-
-  if (el.cloudSetupHelpPanel) {
-    el.cloudSetupHelpPanel.hidden = syncMode !== 'cloud' || firebaseConfigReady
-  }
 
   if (el.cloudPullModeInput) {
     el.cloudPullModeInput.disabled = syncMode !== 'cloud'
@@ -1594,6 +1541,17 @@ function getEntryById(id) {
 function setOverlayOpen(node, isOpen) {
   node.classList.toggle('open', isOpen)
   node.setAttribute('aria-hidden', String(!isOpen))
+}
+
+window.timeTrackerSetOverlayOpen = function timeTrackerSetOverlayOpen(which, isOpen) {
+  if (which === 'project' && el.projectOverlay) {
+    setOverlayOpen(el.projectOverlay, Boolean(isOpen))
+    return
+  }
+
+  if (which === 'settings' && el.settingsOverlay) {
+    setOverlayOpen(el.settingsOverlay, Boolean(isOpen))
+  }
 }
 
 function startSession(project, options = {}) {

@@ -121,6 +121,9 @@ body {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 11px 12px;
@@ -129,6 +132,7 @@ body {
   color: var(--text);
   background: color-mix(in srgb, var(--surface-2) 90%, white 10%);
   cursor: pointer;
+  text-decoration: none;
 }
 
 .btn:disabled {
@@ -532,6 +536,11 @@ input[type='time']::-webkit-date-and-time-value {
 }
 
 .menu-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.menu-overlay:target {
   opacity: 1;
   pointer-events: auto;
 }

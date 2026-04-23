@@ -13,12 +13,22 @@
       <header class="topbar">
         <h2 data-i18n="appTitle">Work Tracker</h2>
         <div class="top-actions">
-          <button id="projectOpenBtn" class="btn menu-btn" type="button" data-i18n="projectsBtn">
+          <a
+            id="projectOpenBtn"
+            class="btn menu-btn"
+            data-i18n="projectsBtn"
+            href="#projectOverlay"
+            onclick="window.timeTrackerSetOverlayOpen && window.timeTrackerSetOverlayOpen('project', true)">
             Projects
-          </button>
-          <button id="settingsOpenBtn" class="btn menu-btn" type="button" data-i18n="settingsBtn">
+          </a>
+          <a
+            id="settingsOpenBtn"
+            class="btn menu-btn"
+            data-i18n="settingsBtn"
+            href="#settingsOverlay"
+            onclick="window.timeTrackerSetOverlayOpen && window.timeTrackerSetOverlayOpen('settings', true)">
             Settings
-          </button>
+          </a>
         </div>
       </header>
 
@@ -87,9 +97,14 @@
       <section class="menu-sheet">
         <header class="menu-header">
           <h2 data-i18n="projectsBtn">Projects</h2>
-          <button id="projectCloseBtn" class="btn menu-btn" type="button" data-i18n="close">
+          <a
+            id="projectCloseBtn"
+            class="btn menu-btn"
+            data-i18n="close"
+            href="#"
+            onclick="window.timeTrackerSetOverlayOpen && window.timeTrackerSetOverlayOpen('project', false)">
             Close
-          </button>
+          </a>
         </header>
 
         <section class="menu-section">
@@ -176,9 +191,14 @@
       <section class="menu-sheet">
         <header class="menu-header">
           <h2 data-i18n="settingsBtn">Settings</h2>
-          <button id="settingsCloseBtn" class="btn menu-btn" type="button" data-i18n="close">
+          <a
+            id="settingsCloseBtn"
+            class="btn menu-btn"
+            data-i18n="close"
+            href="#"
+            onclick="window.timeTrackerSetOverlayOpen && window.timeTrackerSetOverlayOpen('settings', false)">
             Close
-          </button>
+          </a>
         </header>
 
         <section class="menu-section">
@@ -241,40 +261,6 @@
             </label>
           </div>
           <p id="cloudStatus" class="hint"></p>
-          <div id="cloudSetupHelpPanel" class="setup-help">
-            <p class="setup-help-title" data-i18n="firebaseSetupHelp">Firebase Setup Help</p>
-            <div class="setup-help-links">
-              <a
-                href="https://console.firebase.google.com/"
-                target="_blank"
-                rel="noreferrer"
-                data-i18n="openFirebaseConsole"
-                >Open Firebase Console</a
-              >
-              <a
-                href="https://console.firebase.google.com/project/_/authentication/providers"
-                target="_blank"
-                rel="noreferrer"
-                data-i18n="openFirebaseAuthPage"
-                >Open Auth Providers</a
-              >
-              <a
-                href="https://console.firebase.google.com/project/_/database"
-                target="_blank"
-                rel="noreferrer"
-                data-i18n="openFirebaseDatabasePage"
-                >Open Realtime Database</a
-              >
-            </div>
-            <p class="setup-help-origins-label" data-i18n="authorizedDomains">
-              Authorized Domains
-            </p>
-            <pre id="authDomainsText" class="setup-help-origins"></pre>
-            <button id="copyAuthDomainsBtn" class="btn" type="button" data-i18n="copyDomains">
-              Copy Domains
-            </button>
-            <p id="setupHelpHint" class="hint"></p>
-          </div>
           <div class="actions-grid">
             <button id="exportBtn" class="btn" type="button" data-i18n="exportJson">
               Export JSON
