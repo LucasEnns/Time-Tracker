@@ -440,7 +440,9 @@ function bindEvents() {
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
   el.importInput.addEventListener('change', onImportJson)
-  el.copyAuthDomainsBtn.addEventListener('click', onCopyAuthDomains)
+  if (el.copyAuthDomainsBtn) {
+    el.copyAuthDomainsBtn.addEventListener('click', onCopyAuthDomains)
+  }
   el.addEntryBtn.addEventListener('click', onAddEntry)
   el.recentEntriesList.addEventListener('click', onRecentEntriesListClick)
   el.cancelDeleteEntryBtn.addEventListener('click', closeDeleteConfirm)
@@ -467,7 +469,7 @@ function bindLiveSettingsEvents() {
     el.paidBreakMinutesInput,
     el.syncModeInput,
     el.cloudPullModeInput,
-  ]
+  ].filter(Boolean)
 
   for (const input of inputs) {
     input.addEventListener('change', onFinish)
@@ -480,8 +482,12 @@ function hydrateInputs() {
   el.targetDaysInput.value = String(state.settings.targetDaysPerWeek)
   el.weekStartsOnInput.value = String(state.settings.weekStartsOn)
   el.startDateInput.value = state.settings.trackingStartDate || ''
-  el.syncModeInput.value = getSyncMode()
-  el.cloudPullModeInput.value = getCloudPullMode()
+  if (el.syncModeInput) {
+    el.syncModeInput.value = getSyncMode()
+  }
+  if (el.cloudPullModeInput) {
+    el.cloudPullModeInput.value = getCloudPullMode()
+  }
   el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
   el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
   el.projectInput.value = state.activeSession?.project || state.lastProject || 'General'
@@ -643,8 +649,8 @@ async function onSaveSettings() {
   const targetDays = Number(el.targetDaysInput.value)
   const weekStartsOn = Number(el.weekStartsOnInput.value)
   const trackingStartDate = el.startDateInput.value
-  const syncMode = String(el.syncModeInput.value || 'local')
-  const cloudPullMode = String(el.cloudPullModeInput.value || 'remote')
+  const syncMode = String(el.syncModeInput?.value || getSyncMode())
+  const cloudPullMode = String(el.cloudPullModeInput?.value || getCloudPullMode())
   const intervalHours = Number(el.breakIntervalHoursInput.value)
   const paidBreak = Number(el.paidBreakMinutesInput.value)
   const previousSyncMode = getSyncMode()
@@ -788,7 +794,9 @@ async function onCopyAuthDomains() {
 }
 
 function renderSuggestedAuthDomains() {
-  el.authDomainsText.textContent = getSuggestedAuthDomains().join('\n')
+  if (el.authDomainsText) {
+    el.authDomainsText.textContent = getSuggestedAuthDomains().join('\n')
+  }
 }
 
 function getSuggestedAuthDomains() {
@@ -809,6 +817,10 @@ function getSyncMode() {
 }
 
 function renderCloudStatus() {
+  if (!el.cloudStatus) {
+    return
+  }
+
   const syncMode = getSyncMode()
   const statusText = syncMode === 'local'
     ? t('localModeActive')
@@ -826,7 +838,9 @@ function renderCloudStatus() {
     el.cloudSetupHelpPanel.hidden = syncMode !== 'cloud' || firebaseConfigReady
   }
 
-  el.cloudPullModeInput.disabled = syncMode !== 'cloud'
+  if (el.cloudPullModeInput) {
+    el.cloudPullModeInput.disabled = syncMode !== 'cloud'
+  }
 }
 
 function getFirebaseConfig() {
