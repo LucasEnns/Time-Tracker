@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = {
   paidBreakIntervalHours: 3.75,
   paidBreakMinutes: 15,
   weekStartsOn: 1,
+  syncMode: 'local',
   cloudPullMode: 'remote',
 }
 
@@ -28,9 +29,11 @@ let autoSyncPushPending = false
 let autoSyncPushTimer = null
 let autoSyncPushInFlight = false
 let isApplyingRemoteState = false
+let cloudSignInInFlight = false
 
 const PROJECT_ADD_NEW_TOKEN = '__add_new__'
 const FIREBASE_CONFIG_GLOBAL = 'TIME_TRACKER_FIREBASE_CONFIG'
+const CLOUD_SIGNIN_ATTEMPT_KEY = `${STORAGE_KEY}-cloud-signin-attempted`
 const UI_LANGUAGE = String(navigator.language || 'en')
   .toLowerCase()
   .startsWith('fr')
@@ -83,15 +86,14 @@ const I18N = {
     paidBreakLengthMin: 'Paid Break Length (minutes)',
     saveSettings: 'Save Settings',
     data: 'Data',
+    syncMode: 'Sync Mode',
+    syncModeLocal: 'Local Only',
+    syncModeCloud: 'Cloud Sync',
     exportJson: 'Export JSON',
     importJson: 'Import JSON',
     cloudPullMode: 'Pull Strategy',
     pullModeRemote: 'Remote Wins (Replace Local)',
     pullModeMerge: 'Merge By ID (Additive)',
-    signInWithGoogle: 'Sign In with Google',
-    signOut: 'Sign Out',
-    pullFromCloud: 'Pull From Cloud',
-    pushToCloud: 'Push To Cloud',
     firebaseUnavailable: 'Firebase is not available yet. Please retry in a moment.',
     firebaseConfigMissing:
       'Firebase is not configured yet. Add firebase-config.js and enable Google sign-in plus Realtime Database.',
@@ -116,6 +118,8 @@ const I18N = {
     copyDomains: 'Copy Domains',
     domainsCopied: 'Domains copied to clipboard.',
     domainsCopyFailed: 'Could not copy domains automatically. Please copy manually.',
+    localModeActive: 'Local mode is active. No cloud connection is used.',
+    cloudConnecting: 'Cloud mode is active. Connecting to Google and restoring sync.',
     cloudStatusSignedOut: 'Not signed in. Local storage is still active.',
     cloudStatusSignedIn: 'Signed in as {email}. Cloud sync is active.',
     cloudInitialUploadDone: 'No cloud backup existed, so your local data was uploaded.',
@@ -207,15 +211,14 @@ const I18N = {
     paidBreakLengthMin: 'Duree pause payee (minutes)',
     saveSettings: 'Enregistrer les parametres',
     data: 'Donnees',
+    syncMode: 'Mode de synchronisation',
+    syncModeLocal: 'Local uniquement',
+    syncModeCloud: 'Synchronisation cloud',
     exportJson: 'Exporter JSON',
     importJson: 'Importer JSON',
     cloudPullMode: 'Strategie de recuperation',
     pullModeRemote: 'Le distant gagne (remplacer local)',
     pullModeMerge: 'Fusion par ID (additif)',
-    signInWithGoogle: 'Se connecter avec Google',
-    signOut: 'Se deconnecter',
-    pullFromCloud: 'Recuperer depuis le cloud',
-    pushToCloud: 'Envoyer vers le cloud',
     firebaseUnavailable: 'Firebase est indisponible pour l instant. Reessayez dans un moment.',
     firebaseConfigMissing:
       'Firebase n est pas encore configure. Ajoutez firebase-config.js et activez Google Sign-In avec Realtime Database.',
@@ -240,6 +243,9 @@ const I18N = {
     copyDomains: 'Copier les domaines',
     domainsCopied: 'Domaines copies dans le presse-papiers.',
     domainsCopyFailed: 'Copie automatique impossible. Copiez manuellement.',
+    localModeActive: 'Le mode local est actif. Aucune connexion cloud n est utilisee.',
+    cloudConnecting:
+      'Le mode cloud est actif. Connexion a Google et restauration de la synchronisation.',
     cloudStatusSignedOut: 'Non connecte. Le stockage local reste actif.',
     cloudStatusSignedIn: 'Connecte en tant que {email}. La synchronisation cloud est active.',
     cloudInitialUploadDone: 'Aucune sauvegarde cloud n existait, donc vos donnees locales ont ete envoyees.',
@@ -336,16 +342,13 @@ const el = {
   exportBtn: document.getElementById('exportBtn'),
   importInput: document.getElementById('importInput'),
   jsonHint: document.getElementById('jsonHint'),
+  syncModeInput: document.getElementById('syncModeInput'),
   cloudPullModeInput: document.getElementById('cloudPullModeInput'),
   cloudStatus: document.getElementById('cloudStatus'),
   cloudSetupHelpPanel: document.getElementById('cloudSetupHelpPanel'),
   authDomainsText: document.getElementById('authDomainsText'),
   copyAuthDomainsBtn: document.getElementById('copyAuthDomainsBtn'),
   setupHelpHint: document.getElementById('setupHelpHint'),
-  signInGoogleBtn: document.getElementById('signInGoogleBtn'),
-  signOutBtn: document.getElementById('signOutBtn'),
-  pullCloudBtn: document.getElementById('pullCloudBtn'),
-  pushCloudBtn: document.getElementById('pushCloudBtn'),
   cloudHint: document.getElementById('cloudHint'),
 
   exportProjectCsvBtn: document.getElementById('exportProjectCsvBtn'),
@@ -437,10 +440,6 @@ function bindEvents() {
   el.exportBtn.addEventListener('click', onExportJson)
   el.exportProjectCsvBtn.addEventListener('click', onExportProjectCsv)
   el.importInput.addEventListener('change', onImportJson)
-  el.signInGoogleBtn.addEventListener('click', onSignInWithGoogle)
-  el.signOutBtn.addEventListener('click', onSignOut)
-  el.pullCloudBtn.addEventListener('click', onPullFromCloud)
-  el.pushCloudBtn.addEventListener('click', onPushToCloud)
   el.copyAuthDomainsBtn.addEventListener('click', onCopyAuthDomains)
   el.addEntryBtn.addEventListener('click', onAddEntry)
   el.recentEntriesList.addEventListener('click', onRecentEntriesListClick)
@@ -466,6 +465,7 @@ function bindLiveSettingsEvents() {
     el.startDateInput,
     el.breakIntervalHoursInput,
     el.paidBreakMinutesInput,
+    el.syncModeInput,
     el.cloudPullModeInput,
   ]
 
@@ -480,6 +480,7 @@ function hydrateInputs() {
   el.targetDaysInput.value = String(state.settings.targetDaysPerWeek)
   el.weekStartsOnInput.value = String(state.settings.weekStartsOn)
   el.startDateInput.value = state.settings.trackingStartDate || ''
+  el.syncModeInput.value = getSyncMode()
   el.cloudPullModeInput.value = getCloudPullMode()
   el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
   el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
@@ -637,14 +638,16 @@ function onEntryProjectChanged() {
   renderProjects()
 }
 
-function onSaveSettings() {
+async function onSaveSettings() {
   const target = Number(el.targetHoursInput.value)
   const targetDays = Number(el.targetDaysInput.value)
   const weekStartsOn = Number(el.weekStartsOnInput.value)
   const trackingStartDate = el.startDateInput.value
+  const syncMode = String(el.syncModeInput.value || 'local')
   const cloudPullMode = String(el.cloudPullModeInput.value || 'remote')
   const intervalHours = Number(el.breakIntervalHoursInput.value)
   const paidBreak = Number(el.paidBreakMinutesInput.value)
+  const previousSyncMode = getSyncMode()
 
   if (!Number.isFinite(target) || target <= 0) {
     setHint(el.settingsHint, t('targetHoursInvalid'))
@@ -679,6 +682,11 @@ function onSaveSettings() {
     return
   }
 
+  if (syncMode !== 'local' && syncMode !== 'cloud') {
+    setHint(el.settingsHint, t('firebaseSyncFailed', { reason: 'Invalid sync mode' }))
+    return
+  }
+
   if (cloudPullMode !== 'remote' && cloudPullMode !== 'merge') {
     setHint(el.settingsHint, t('pullModeInvalid'))
     return
@@ -688,11 +696,33 @@ function onSaveSettings() {
   state.settings.targetDaysPerWeek = Math.round(targetDays)
   state.settings.weekStartsOn = Math.round(weekStartsOn)
   state.settings.trackingStartDate = trackingStartDate || ''
+  state.settings.syncMode = syncMode
   state.settings.cloudPullMode = cloudPullMode
   state.settings.paidBreakIntervalHours = intervalHours
   state.settings.paidBreakMinutes = paidBreak
 
   saveState({ immediatePush: false })
+  renderCloudStatus()
+
+  if (syncMode === 'cloud') {
+    initializeFirebaseSync()
+    if (previousSyncMode !== 'cloud' && !firebaseUser) {
+      try {
+        await onSignInWithGoogle()
+      } catch {
+        // onSignInWithGoogle already surfaces the failure.
+      }
+    }
+  } else if (previousSyncMode === 'cloud' && firebaseAuth && firebaseUser) {
+    try {
+      await firebaseAuth.signOut()
+    } catch {
+      // Stay local even if sign-out fails; the mode gate still prevents sync.
+    }
+    firebaseUser = null
+    renderCloudStatus()
+  }
+
   setHint(el.settingsHint, t('settingsSaved'))
   render()
 }
@@ -774,25 +804,29 @@ function getCloudPullMode() {
   return state.settings.cloudPullMode === 'merge' ? 'merge' : 'remote'
 }
 
+function getSyncMode() {
+  return state.settings.syncMode === 'cloud' ? 'cloud' : 'local'
+}
+
 function renderCloudStatus() {
-  const statusText = firebaseUser
-    ? t('cloudStatusSignedIn', {
-        email: firebaseUser.email || firebaseUser.displayName || 'Google user',
-      })
-    : firebaseConfigReady
-      ? t('cloudStatusSignedOut')
-      : t('firebaseConfigMissing')
+  const syncMode = getSyncMode()
+  const statusText = syncMode === 'local'
+    ? t('localModeActive')
+    : firebaseUser
+      ? t('cloudStatusSignedIn', {
+          email: firebaseUser.email || firebaseUser.displayName || 'Google user',
+        })
+      : firebaseConfigReady
+        ? t('cloudConnecting')
+        : t('firebaseConfigMissing')
 
   setHint(el.cloudStatus, statusText)
 
   if (el.cloudSetupHelpPanel) {
-    el.cloudSetupHelpPanel.hidden = firebaseConfigReady
+    el.cloudSetupHelpPanel.hidden = syncMode !== 'cloud' || firebaseConfigReady
   }
 
-  el.signInGoogleBtn.disabled = !firebaseConfigReady || Boolean(firebaseUser)
-  el.signOutBtn.disabled = !firebaseUser
-  el.pullCloudBtn.disabled = !firebaseUser
-  el.pushCloudBtn.disabled = !firebaseUser
+  el.cloudPullModeInput.disabled = syncMode !== 'cloud'
 }
 
 function getFirebaseConfig() {
@@ -833,6 +867,12 @@ function getCloudStatePath(uid) {
 }
 
 function initializeFirebaseSync() {
+  if (firebaseAuth || getSyncMode() !== 'cloud') {
+    renderCloudStatus()
+    void ensureCloudSignIn()
+    return
+  }
+
   renderCloudStatus()
 
   if (!window.firebase || typeof window.firebase.initializeApp !== 'function') {
@@ -852,6 +892,10 @@ function initializeFirebaseSync() {
   firebaseConfigReady = true
   renderCloudStatus()
 
+  void firebaseAuth.getRedirectResult().catch((error) => {
+    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
+  })
+
   firebaseAuth.onAuthStateChanged((user) => {
     void handleFirebaseAuthChange(user)
   })
@@ -859,10 +903,22 @@ function initializeFirebaseSync() {
 
 async function handleFirebaseAuthChange(user) {
   firebaseUser = user
+  if (user) {
+    clearCloudSignInAttempt()
+    cloudSignInInFlight = false
+  }
   renderCloudStatus()
+
+  if (getSyncMode() !== 'cloud') {
+    autoSyncPullAttempted = true
+    clearCloudSignInAttempt()
+    cloudSignInInFlight = false
+    return
+  }
 
   if (!user) {
     autoSyncPullAttempted = true
+    void ensureCloudSignIn()
     return
   }
 
@@ -894,84 +950,55 @@ async function handleFirebaseAuthChange(user) {
 
 async function onSignInWithGoogle() {
   try {
+    if (getSyncMode() !== 'cloud') {
+      throw new Error(t('signInRequired'))
+    }
     ensureFirebaseOriginSupported()
+    initializeFirebaseSync()
     ensureFirebaseReady({ requireUser: false })
+    cloudSignInInFlight = true
     const provider = new window.firebase.auth.GoogleAuthProvider()
     await firebaseAuth.signInWithPopup(provider)
+    clearCloudSignInAttempt()
     setHint(el.cloudHint, t('firebaseConnected'))
   } catch (error) {
+    cloudSignInInFlight = false
     setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
   }
 }
 
-async function onSignOut() {
-  try {
-    ensureFirebaseReady({ requireUser: false })
-    await firebaseAuth.signOut()
-    setHint(el.cloudHint, t('cloudStatusSignedOut'))
-  } catch (error) {
-    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
-  }
+function hasCloudSignInAttempt() {
+  return sessionStorage.getItem(CLOUD_SIGNIN_ATTEMPT_KEY) === '1'
 }
 
-async function onPullFromCloud() {
-  try {
-    ensureFirebaseReady()
-    const remoteState = await downloadCloudState(firebaseUser.uid)
-    if (!remoteState) {
-      setHint(el.cloudHint, t('cloudNoBackup'))
-      return
-    }
-
-    const normalized = normalizeImportedState(remoteState)
-    const pulledSessions = normalized.sessions.length
-    const pulledAwards = normalized.paidBreakAwards.length
-
-    if (getCloudPullMode() === 'remote') {
-      backupLocalSnapshot('pre-remote-replace')
-      replaceLocalStateFromRemote(remoteState, { suppressAutoPush: true })
-      setHint(
-        el.cloudHint,
-        `${t('cloudPullRemoteDone', {
-          sessions: pulledSessions,
-          awards: pulledAwards,
-        })} ${t('localBackupCreated')}`,
-      )
-      return
-    }
-
-    const merged = applyImportedState(remoteState, { suppressAutoPush: true })
-    if (merged === 0 && normalized.activeSession && state.activeSession) {
-      setHint(
-        el.cloudHint,
-        `${t('cloudPullDetailed', {
-          sessions: pulledSessions,
-          awards: pulledAwards,
-          merged,
-        })} ${t('cloudPullActiveImported')}`,
-      )
-      return
-    }
-
-    setHint(
-      el.cloudHint,
-      t('cloudPullDetailed', {
-        sessions: pulledSessions,
-        awards: pulledAwards,
-        merged,
-      }),
-    )
-  } catch (error) {
-    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
-  }
+function markCloudSignInAttempt() {
+  sessionStorage.setItem(CLOUD_SIGNIN_ATTEMPT_KEY, '1')
 }
 
-async function onPushToCloud() {
+function clearCloudSignInAttempt() {
+  sessionStorage.removeItem(CLOUD_SIGNIN_ATTEMPT_KEY)
+}
+
+async function ensureCloudSignIn() {
+  if (
+    getSyncMode() !== 'cloud' ||
+    !firebaseConfigReady ||
+    !firebaseAuth ||
+    firebaseUser ||
+    cloudSignInInFlight ||
+    hasCloudSignInAttempt()
+  ) {
+    return
+  }
+
   try {
-    ensureFirebaseReady()
-    await uploadCloudState(getSerializableState(), firebaseUser.uid)
-    setHint(el.cloudHint, t('cloudPushDone'))
+    ensureFirebaseOriginSupported()
+    cloudSignInInFlight = true
+    markCloudSignInAttempt()
+    const provider = new window.firebase.auth.GoogleAuthProvider()
+    await firebaseAuth.signInWithRedirect(provider)
   } catch (error) {
+    cloudSignInInFlight = false
     setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
   }
 }
@@ -1078,7 +1105,7 @@ async function runAutoSyncPullOnInit() {
 function scheduleAutoSyncPush(options = {}) {
   const immediate = Boolean(options.immediate)
 
-  if (isApplyingRemoteState || !firebaseUser) {
+  if (getSyncMode() !== 'cloud' || isApplyingRemoteState || !firebaseUser) {
     return
   }
 
@@ -2404,6 +2431,7 @@ function normalizeImportedState(input) {
     paidBreakIntervalHours: Number.isFinite(Number(input?.settings?.paidBreakIntervalHours))
       ? Number(input.settings.paidBreakIntervalHours)
       : inferredHours || DEFAULT_SETTINGS.paidBreakIntervalHours,
+    syncMode: input?.settings?.syncMode === 'cloud' ? 'cloud' : DEFAULT_SETTINGS.syncMode,
     cloudPullMode:
       input?.settings?.cloudPullMode === 'merge' || input?.settings?.cloudPullMode === 'remote'
         ? input.settings.cloudPullMode

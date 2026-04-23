@@ -224,6 +224,13 @@
           <h3 data-i18n="data">Data</h3>
           <div class="settings-grid">
             <label class="field">
+              <span data-i18n="syncMode">Sync Mode</span>
+              <select id="syncModeInput">
+                <option value="local" data-i18n="syncModeLocal">Local Only</option>
+                <option value="cloud" data-i18n="syncModeCloud">Cloud Sync</option>
+              </select>
+            </label>
+            <label class="field">
               <span data-i18n="cloudPullMode">Pull Strategy</span>
               <select id="cloudPullModeInput">
                 <option value="remote" data-i18n="pullModeRemote">
@@ -274,18 +281,6 @@
             </button>
             <label class="btn file-btn" for="importInput" data-i18n="importJson">Import JSON</label>
             <input id="importInput" type="file" accept="application/json" hidden />
-            <button id="signInGoogleBtn" class="btn" type="button" data-i18n="signInWithGoogle">
-              Sign In with Google
-            </button>
-            <button id="signOutBtn" class="btn" type="button" data-i18n="signOut">
-              Sign Out
-            </button>
-            <button id="pullCloudBtn" class="btn" type="button" data-i18n="pullFromCloud">
-              Pull From Cloud
-            </button>
-            <button id="pushCloudBtn" class="btn" type="button" data-i18n="pushToCloud">
-              Push To Cloud
-            </button>
           </div>
           <p id="cloudHint" class="hint"></p>
           <p id="jsonHint" class="hint"></p>
