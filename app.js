@@ -707,11 +707,7 @@ async function onSaveSettings() {
   if (syncMode === 'cloud') {
     initializeFirebaseSync()
     if (previousSyncMode !== 'cloud' && !firebaseUser) {
-      try {
-        await onSignInWithGoogle()
-      } catch {
-        // onSignInWithGoogle already surfaces the failure.
-      }
+      await ensureCloudSignIn()
     }
   } else if (previousSyncMode === 'cloud' && firebaseAuth && firebaseUser) {
     try {
@@ -945,25 +941,6 @@ async function handleFirebaseAuthChange(user) {
     if (autoSyncPushPending) {
       scheduleAutoSyncPush()
     }
-  }
-}
-
-async function onSignInWithGoogle() {
-  try {
-    if (getSyncMode() !== 'cloud') {
-      throw new Error(t('signInRequired'))
-    }
-    ensureFirebaseOriginSupported()
-    initializeFirebaseSync()
-    ensureFirebaseReady({ requireUser: false })
-    cloudSignInInFlight = true
-    const provider = new window.firebase.auth.GoogleAuthProvider()
-    await firebaseAuth.signInWithPopup(provider)
-    clearCloudSignInAttempt()
-    setHint(el.cloudHint, t('firebaseConnected'))
-  } catch (error) {
-    cloudSignInInFlight = false
-    setHint(el.cloudHint, t('firebaseSyncFailed', { reason: error.message }))
   }
 }
 
