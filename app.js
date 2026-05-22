@@ -2102,7 +2102,7 @@ function computeAwardRangeMs(startDate, endDate, project) {
     if (project && award.project !== project) {
       continue
     }
-    if (award.at >= startMs && award.at <= endMs) {
+    if (award.at >= startMs && award.at < endMs) {
       total += award.durationMs
     }
   }
@@ -2115,7 +2115,7 @@ function computeHolidayRangeMs(startDate, endDate) {
 
   let total = 0
   for (const credit of state.holidayCredits) {
-    if (credit.at >= startMs && credit.at <= endMs) {
+    if (credit.at >= startMs && credit.at < endMs) {
       total += credit.durationMs
     }
   }
