@@ -493,7 +493,7 @@ function hydrateInputs() {
   el.breakIntervalHoursInput.value = String(state.settings.paidBreakIntervalHours)
   el.paidBreakMinutesInput.value = String(state.settings.paidBreakMinutes)
   el.holidayDateInput.value = formatDateInput(now)
-  el.holidayDaysInput.value = '1'
+  el.holidayDaysInput.value = formatHolidayDays(getDefaultHolidayDays())
   el.projectInput.value = state.activeSession?.project || state.lastProject || 'General'
   el.entryProjectInput.value = el.projectInput.value
   el.entryDateInput.value = formatDateInput(now)
@@ -709,6 +709,9 @@ async function onSaveSettings() {
   state.settings.cloudPullMode = cloudPullMode
   state.settings.paidBreakIntervalHours = intervalHours
   state.settings.paidBreakMinutes = paidBreak
+  if (document.activeElement !== el.holidayDaysInput) {
+    el.holidayDaysInput.value = formatHolidayDays(getDefaultHolidayDays())
+  }
 
   saveState({ immediatePush: false })
   renderCloudStatus()
@@ -1165,6 +1168,7 @@ function getSerializableState() {
     settings: state.settings,
     sessions: state.sessions,
     paidBreakAwards: state.paidBreakAwards,
+    holidayCredits: state.holidayCredits,
     activeSession: state.activeSession,
     lastProject: state.lastProject,
     activeRunStart: state.activeRunStart,
@@ -1986,13 +1990,18 @@ function renderStats() {
   const trackingStart = resolveTrackingStart(now)
   const completedWindowEnd = currentWeekStart
   const hasCompletedWindow = completedWindowEnd.getTime() > trackingStart.getTime()
-  const totalSinceStart = hasCompletedWindow
+  const sinceStartTotal = hasCompletedWindow
     ? computeRangeTotalMs(trackingStart, completedWindowEnd)
     : 0
-  const activeWeeks = hasCompletedWindow
-    ? countActiveWeeks(trackingStart, completedWindowEnd, state.settings.weekStartsOn)
+  const averageWindowStart = getFirstFullWeekStart(trackingStart, state.settings.weekStartsOn)
+  const hasAverageWindow = completedWindowEnd.getTime() > averageWindowStart.getTime()
+  const averageTotal = hasAverageWindow
+    ? computeRangeTotalMs(averageWindowStart, completedWindowEnd)
     : 0
-  const avgYearWeek = activeWeeks > 0 ? totalSinceStart / activeWeeks : 0
+  const activeWeeks = hasAverageWindow
+    ? countActiveWeeks(averageWindowStart, completedWindowEnd, state.settings.weekStartsOn)
+    : 0
+  const avgYearWeek = activeWeeks > 0 ? averageTotal / activeWeeks : 0
   const weekTargetMs = state.settings.targetHoursPerWeek * 60 * 60 * 1000
   const weekDeltaMs = week - weekTargetMs
 
@@ -2005,7 +2014,7 @@ function renderStats() {
       )
     : 0
   const targetSinceStartMs = elapsedTargetDays * (weekTargetMs / state.settings.targetDaysPerWeek)
-  const yearDeltaMs = totalSinceStart - targetSinceStartMs
+  const yearDeltaMs = sinceStartTotal - targetSinceStartMs
 
   const dayBonus = computeAwardRangeMs(startOfDay(now), now)
 
@@ -2134,10 +2143,12 @@ function materializeAwardsForNow() {
 
 function countActiveWeeks(startDate, endDate, weekStartsOn) {
   const keys = new Set()
+  const startMs = startDate.getTime()
+  const endMs = endDate.getTime()
 
   const sessions = materializeSessionsForNow()
   for (const session of sessions) {
-    if (session.end < startDate.getTime() || session.start > endDate.getTime()) {
+    if (session.end <= startMs || session.start >= endMs) {
       continue
     }
     const weekStart = startOfWeek(new Date(session.start), weekStartsOn)
@@ -2146,7 +2157,7 @@ function countActiveWeeks(startDate, endDate, weekStartsOn) {
 
   const awards = materializeAwardsForNow()
   for (const award of awards) {
-    if (award.at < startDate.getTime() || award.at > endDate.getTime()) {
+    if (award.at < startMs || award.at >= endMs) {
       continue
     }
     const weekStart = startOfWeek(new Date(award.at), weekStartsOn)
@@ -2154,7 +2165,7 @@ function countActiveWeeks(startDate, endDate, weekStartsOn) {
   }
 
   for (const credit of state.holidayCredits) {
-    if (credit.at < startDate.getTime() || credit.at > endDate.getTime()) {
+    if (credit.at < startMs || credit.at >= endMs) {
       continue
     }
     const weekStart = startOfWeek(new Date(credit.at), weekStartsOn)
@@ -2183,6 +2194,17 @@ function startOfWeek(date, weekStartsOn) {
   start.setHours(0, 0, 0, 0)
   start.setDate(start.getDate() - diff)
   return start
+}
+
+function getFirstFullWeekStart(date, weekStartsOn) {
+  const weekStart = startOfWeek(date, weekStartsOn)
+  if (weekStart.getTime() === startOfDay(date).getTime()) {
+    return weekStart
+  }
+
+  const nextWeekStart = new Date(weekStart)
+  nextWeekStart.setDate(nextWeekStart.getDate() + 7)
+  return nextWeekStart
 }
 
 function dayKey(date) {
@@ -2357,6 +2379,15 @@ function createId() {
 function computeHolidayDurationMs(days) {
   const dailyHours = state.settings.targetHoursPerWeek / state.settings.targetDaysPerWeek
   return Math.max(0, dailyHours * days * 60 * 60 * 1000)
+}
+
+function getDefaultHolidayDays() {
+  const targetHours = Number(state.settings.targetHoursPerWeek)
+  if (!Number.isFinite(targetHours) || targetHours <= 0) {
+    return 1
+  }
+
+  return Math.max(0.1, Math.round((targetHours / 40) * 100) / 100)
 }
 
 function createHolidayCredit(at, days) {
